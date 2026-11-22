@@ -1,0 +1,171 @@
+/* À charger après style.css */
+[hidden] { display: none !important; }
+input, select, textarea {
+  width: 100%; padding: 12px 14px; margin: 6px 0; border-radius: 12px;
+  border: 1px solid var(--contour); background: var(--noir); color: var(--blanc); font: inherit;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--neon); box-shadow: var(--lueur); }
+label { display: block; font-size: 0.85rem; color: var(--gris); margin-top: 8px; }
+#auth { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
+.auth-boite { width: 100%; max-width: 420px; }
+.auth-boite .logo { display: block; font-size: 3rem; text-align: center; }
+.slogan { text-align: center; color: var(--gris); margin-bottom: 18px; }
+.lien { background: none; border: none; color: var(--violet); cursor: pointer; font: inherit; margin-top: 12px; }
+.media { width: 100%; border-radius: 14px; margin-top: 10px; max-height: 420px; object-fit: cover; }
+.duel-ligne .media { margin: 0; aspect-ratio: 3 / 4; min-width: 0; }
+img.avatar { object-fit: cover; }
+.deux { display: flex; gap: 10px; margin-top: 12px; }
+.like {
+  margin-top: 10px; padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  background: transparent; color: var(--gris); border: 1px solid var(--contour); font: inherit;
+}
+.like.actif { color: var(--blanc); background: var(--violet-fonce); border-color: var(--neon); }
+.ligne { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(139, 92, 246, 0.14); font-size: 0.9rem; }
+.gain { color: var(--neon); font-weight: 700; }
+#toast {
+  position: fixed; left: 50%; bottom: 96px; z-index: 50; max-width: 90%;
+  transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+  padding: 12px 20px; border-radius: 999px;
+  background: var(--noir-2); border: 1px solid var(--neon); box-shadow: var(--lueur);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+#toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+/* ===== v2 : zoom, vidéos, messages ===== */
+img.zoom { cursor: zoom-in; }
+video.media { background: #000; }
+#lightbox { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 12px; background: rgba(8, 8, 13, 0.96); }
+#lightbox img { max-width: 100%; max-height: 100%; border-radius: 12px; box-shadow: var(--lueur); }
+.nav button { padding: 6px 6px; font-size: 0.68rem; }
+.conv { cursor: pointer; }
+#fil-chat { height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.bulle { max-width: 78%; padding: 10px 14px; border-radius: 16px; background: var(--noir); border: 1px solid var(--contour); align-self: flex-start; word-break: break-word; }
+.bulle.moi { align-self: flex-end; background: linear-gradient(135deg, var(--neon), var(--violet-fonce)); border-color: transparent; }
+#f-chat input { margin: 0; }
+
+/* ===== v3 : stories, réels, notifications ===== */
+.stories { display: flex; gap: 14px; overflow-x: auto; padding: 4px 2px 14px; }
+.story { background: none; border: none; color: var(--blanc); display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; flex: 0 0 auto; font: inherit; }
+.story small { font-size: 0.72rem; color: var(--gris); max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.anneau { display: block; padding: 3px; border-radius: 50%; background: linear-gradient(135deg, var(--neon), var(--violet-fonce)); box-shadow: var(--lueur); }
+.anneau.plus { background: var(--contour); box-shadow: none; }
+.avatar.mini { width: 56px; height: 56px; font-size: 1.2rem; margin: 0; border-width: 2px; box-shadow: none; object-fit: cover; }
+.cloche { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; background: var(--noir-2); border: 1px solid var(--contour); }
+.cloche svg { width: 20px; height: 20px; stroke: var(--blanc); }
+.reel { position: relative; margin: 14px 0; border-radius: var(--rayon); overflow: hidden; border: 1px solid var(--contour); background: #000; box-shadow: var(--lueur); }
+.reel video { display: block; width: 100%; aspect-ratio: 9 / 16; max-height: 75vh; object-fit: cover; }
+.reel-info { position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 16px 16px; background: linear-gradient(transparent, rgba(8, 8, 13, 0.92)); }
+.suivre { margin-top: 8px; padding: 6px 16px; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 700; color: var(--blanc); background: linear-gradient(135deg, var(--neon), var(--violet-fonce)); border: none; }
+.suivre.actif { background: transparent; border: 1px solid var(--violet); color: var(--violet); }
+.rang .suivre { margin: 0 0 0 10px; }
+#viewer { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; background: #000; }
+#viewer img, #viewer video { max-width: 100%; max-height: 100%; }
+.barres { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; gap: 4px; z-index: 1; }
+.barres i { flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.3); }
+.barres i.fait { background: var(--neon); }
+.notif { padding: 12px 0; border-bottom: 1px solid rgba(139, 92, 246, 0.14); }
+.notif:last-child { border-bottom: none; }
+.notif small { display: block; color: var(--gris); margin-top: 2px; }
+
+/* ===== v3.1 : accueil plein écran façon TikTok ===== */
+body.accueil { padding-bottom: 0; overflow: hidden; }
+body.accueil main {
+  padding: 0;
+  height: calc(100vh - var(--haut, 69px) - var(--bas, 74px));
+  height: calc(100dvh - var(--haut, 69px) - var(--bas, 74px));
+}
+#feed.active { display: flex; flex-direction: column; height: 100%; position: relative; }
+#feed .stories {
+  flex: none; padding: 8px 12px; margin: 0;
+  background: rgba(8, 8, 13, 0.95); border-bottom: 1px solid var(--contour);
+}
+#liste-reels {
+  flex: 1; min-height: 0; overflow-y: auto;
+  scroll-snap-type: y mandatory; overscroll-behavior: contain;
+}
+#liste-reels > p { padding: 24px; }
+#liste-reels .reel {
+  height: 100%; margin: 0; border: none; border-radius: 0; box-shadow: none;
+  scroll-snap-align: start; scroll-snap-stop: always;
+}
+#liste-reels .reel video { width: 100%; height: 100%; max-height: none; aspect-ratio: auto; object-fit: cover; }
+#liste-reels .reel-info { padding-bottom: 28px; }
+#btn-reel {
+  position: absolute; right: 14px; bottom: 18px; z-index: 5;
+  width: auto; padding: 12px 18px;
+}
+#f-reel:not([hidden]) {
+  position: fixed; top: 22%; left: 16px; right: 16px; z-index: 40;
+  max-width: 608px; margin: 0 auto;
+}
+
+/* ===== v4 : j'aime, commentaires, création de réels ===== */
+.reel-actions { position: absolute; right: 12px; bottom: 96px; z-index: 2; display: flex; flex-direction: column; gap: 16px; }
+.reel-actions button {
+  width: 52px; padding: 8px 0; border-radius: 26px; cursor: pointer; font: inherit; color: var(--blanc);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: rgba(8, 8, 13, 0.55); border: 1px solid var(--contour);
+}
+.reel-actions span { font-size: 1.4rem; line-height: 1; display: block; }
+.reel-actions svg { width: 24px; height: 24px; stroke: var(--blanc); }
+.reel-actions small { font-size: 0.75rem; }
+.coeur.actif span { color: var(--neon); text-shadow: 0 0 12px var(--neon); }
+#liste-reels .reel-info { padding-right: 80px; }
+#commentaires {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
+  max-width: 640px; margin: 0 auto; padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: var(--noir-2); border: 1px solid var(--contour); border-bottom: none;
+  border-radius: 20px 20px 0 0; box-shadow: 0 -10px 40px rgba(91, 33, 182, 0.35);
+}
+.comm-tete { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+#liste-comm { max-height: 40vh; overflow-y: auto; margin-bottom: 10px; }
+#f-comm input { margin: 0; }
+#f-reel .deux { margin-top: 0; }
+#f-reel .deux .bouton { padding: 12px 8px; }
+
+/* ===== v4.1 : cœur du double toucher ===== */
+.coeur-pop {
+  position: absolute; z-index: 3; pointer-events: none;
+  font-size: 5rem; line-height: 1; color: var(--neon); text-shadow: 0 0 30px var(--neon);
+  transform: translate(-50%, -50%); animation: pop 0.7s ease forwards;
+}
+@keyframes pop {
+  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+  30% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+  100% { transform: translate(-50%, -90%) scale(1); opacity: 0; }
+}
+
+/* ===== v4.2 : rond de chargement ===== */
+.bouton.charge { position: relative; color: transparent; pointer-events: none; opacity: 0.9; }
+.bouton.charge::after {
+  content: ""; position: absolute; width: 22px; height: 22px; border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.35); border-top-color: var(--blanc);
+  animation: tourne 0.7s linear infinite;
+}
+@keyframes tourne { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .bouton.charge::after { animation: tourne 1.4s linear infinite !important; }
+}
+
+/* ===== v5 : menu trois points ===== */
+.points3 {
+  position: absolute; top: 12px; right: 12px; z-index: 4;
+  width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  color: var(--blanc); background: rgba(8, 8, 13, 0.55); border: 1px solid var(--contour);
+}
+.points3 svg { width: 20px; height: 20px; }
+#viewer .points3 { top: 28px; z-index: 5; }
+#menu {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
+  max-width: 640px; margin: 0 auto; padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+  background: var(--noir-2); border: 1px solid var(--contour); border-bottom: none;
+  border-radius: 20px 20px 0 0; box-shadow: 0 -10px 40px rgba(91, 33, 182, 0.45);
+}
+#menu-actions { margin-bottom: 10px; }
+.ligne .bouton { padding: 6px 14px; }
+
+/* ===== v6 : menu complet ===== */
+#menu-actions { max-height: 60vh; overflow-y: auto; }
+#menu-actions .bouton { margin-bottom: 8px; }
+.enregistre { margin-bottom: 14px; }
+.enregistre video { width: 100%; max-height: 50vh; border-radius: 12px; background: #000; }
