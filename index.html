@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08080D">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="VS">
+  <title>VS</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="extra.css">
+</head>
+<body>
+
+<!-- CONNEXION / INSCRIPTION -->
+<section id="auth" hidden>
+  <div class="auth-boite carte">
+    <span class="logo">VS</span>
+    <p class="slogan">Montre-toi. Défie. Gagne.</p>
+
+    <form id="f-login">
+      <input name="email" type="email" placeholder="Adresse e-mail" required>
+      <input name="password" type="password" placeholder="Mot de passe" required>
+      <button class="bouton large" style="margin-top:10px">Se connecter</button>
+      <button type="button" class="lien" id="oubli">Mot de passe oublié</button><br>
+      <button type="button" class="lien" id="vers-inscription">Créer un compte</button>
+    </form>
+
+    <form id="f-signup" hidden>
+      <input name="pseudo" placeholder="Pseudo (lettres, chiffres, _)" pattern="[A-Za-z0-9_]{3,20}" required>
+      <input name="prenom" placeholder="Prénom" required>
+      <label for="naissance">Date de naissance (13 ans minimum)</label>
+      <input id="naissance" name="naissance" type="date" required>
+      <input name="email" type="email" placeholder="Adresse e-mail" required>
+      <input name="password" type="password" placeholder="Mot de passe (8 caractères min.)" minlength="8" required>
+      <button class="bouton large" style="margin-top:10px">Créer mon compte</button>
+      <button type="button" class="lien" id="vers-connexion">J'ai déjà un compte</button>
+    </form>
+  </div>
+</section>
+
+<!-- APPLICATION -->
+<div id="app" hidden>
+  <header class="entete">
+    <span class="logo">VS</span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div class="points">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span id="solde">0</span> abonnés
+      </div>
+      <button class="cloche" id="cloche" aria-label="Notifications">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="page active" id="feed">
+      <div class="stories" id="stories"></div>
+      <button type="button" class="bouton" id="btn-reel">+ Réel</button>
+      <form id="f-reel" class="carte" style="margin-top:12px" hidden>
+        <input name="legende" maxlength="150" placeholder="Légende (facultatif)">
+        <div class="deux">
+          <button type="button" class="bouton contour large" data-source="cam-arriere">Filmer</button>
+          <button type="button" class="bouton contour large" data-source="cam-selfie">Selfie</button>
+          <button type="button" class="bouton contour large" data-source="galerie">Galerie</button>
+        </div>
+        <p class="secondaire" id="nom-reel">Aucune vidéo choisie (30 Mo max)</p>
+        <input type="file" id="cam-arriere" accept="video/*" capture="environment" hidden>
+        <input type="file" id="cam-selfie" accept="video/*" capture="user" hidden>
+        <input type="file" id="galerie" accept="video/*" hidden>
+        <button class="bouton large" style="margin-top:10px">Publier le réel</button>
+        <button type="button" class="lien" id="annuler-reel">Annuler</button>
+      </form>
+      <div id="liste-reels"></div>
+    </section>
+
+    <section class="page" id="notifs">
+      <h1>Notifications</h1>
+      <div class="carte" id="liste-notifs" style="margin-top:16px"></div>
+    </section>
+
+    <section class="page" id="duels">
+      <form id="f-duel" class="carte">
+        <h2 style="margin-top:0">Créer un duel</h2>
+        <input name="titre" placeholder="Titre du duel" minlength="3" maxlength="80" required>
+        <select name="categorie" required>
+          <option>Mode</option><option>Beauté</option><option>Humour</option><option>Sport</option>
+          <option>Musique</option><option>Gaming</option><option>Créativité</option><option>Lifestyle</option>
+        </select>
+        <label>Contenu A (photo ou vidéo, 30 Mo max)</label><input name="a" type="file" accept="image/*,video/*" required>
+        <label>Contenu B (même type que A)</label><input name="b" type="file" accept="image/*,video/*" required>
+        <button class="bouton large" style="margin-top:10px">Lancer le duel (24 h)</button>
+      </form>
+      <div id="liste-duels"></div>
+    </section>
+
+    <section class="page" id="classement">
+      <h1>Classement</h1>
+      <p class="secondaire">Les 100 premiers selon leurs abonnés.</p>
+      <div class="carte" id="liste-classement" style="margin-top:16px"></div>
+    </section>
+
+    <section class="page" id="messages">
+      <div id="conversations">
+        <h1>Messages</h1>
+        <form id="f-recherche" class="carte" style="margin-top:12px">
+          <input name="q" placeholder="Chercher un pseudo" maxlength="20">
+          <button class="bouton large">Chercher</button>
+          <div id="resultats"></div>
+        </form>
+        <div class="carte" id="liste-conv"></div>
+      </div>
+      <div id="chat" hidden>
+        <button type="button" class="lien" id="retour">← Retour</button>
+        <h2 id="chat-titre"></h2>
+        <div class="carte" id="fil-chat"></div>
+        <form id="f-chat" class="deux">
+          <input name="texte" placeholder="Ton message" maxlength="1000" autocomplete="off" required>
+          <button class="bouton">Envoyer</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="page" id="profil">
+      <div class="carte profil" id="fiche"></div>
+      <form id="f-profil" class="carte">
+        <h2 style="margin-top:0">Modifier mon profil</h2>
+        <input name="prenom" placeholder="Prénom" required>
+        <textarea name="bio" rows="2" maxlength="200" placeholder="Ta description"></textarea>
+        <label>Photo de profil</label><input name="avatar" type="file" accept="image/*">
+        <button class="bouton large" style="margin-top:10px">Enregistrer</button>
+      </form>
+            <div class="carte"><h2 style="margin-top:0">Réels enregistrés</h2><div id="liste-enregistres"></div></div>
+      <div class="carte"><h2 style="margin-top:0">Comptes en sourdine</h2><div id="liste-sourdine"></div></div>
+      <div class="carte"><h2 style="margin-top:0">Comptes bloqués</h2><div id="liste-bloques"></div></div>
+      <button class="bouton contour large" id="deconnexion">Se déconnecter</button>
+    </section>
+  </main>
+
+  <nav class="nav">
+    <button class="actif" data-page="feed">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Accueil
+    </button>
+    <button data-page="duels">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 17.5 6-6M3 3l9 9M9.5 6.5 3 13M20 4l-9 9"/><path d="m5 19 3-3M16 16l3 3"/></svg>Duels
+    </button>
+    <button data-page="classement">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20V10M12 20V4M18 20v-6"/></svg>Classement
+    </button>
+    <button data-page="messages">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Messages
+    </button>
+    <button data-page="profil">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Profil
+    </button>
+  </nav>
+</div>
+
+<div id="lightbox" hidden><img alt=""></div>
+<div id="commentaires" hidden>
+  <div class="comm-tete"><strong>Commentaires</strong><button type="button" class="lien" id="fermer-comm">Fermer</button></div>
+  <div id="liste-comm"></div>
+  <form id="f-comm" class="deux">
+    <input name="texte" placeholder="Ajoute un commentaire" maxlength="300" autocomplete="off" required>
+    <button class="bouton">Envoyer</button>
+  </form>
+</div>
+<div id="menu" hidden>
+  <div id="menu-actions"></div>
+  <button type="button" class="bouton contour large" id="annuler-menu">Annuler</button>
+</div>
+<input type="file" id="story-input" accept="image/*,video/*" hidden>
+<div id="viewer" hidden></div>
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
