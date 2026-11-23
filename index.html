@@ -10,8 +10,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="VS">
   <title>VS</title>
-  <link rel="stylesheet" href="style.css?v=11">
-  <link rel="stylesheet" href="extra.css?v=11">
+  <link rel="stylesheet" href="style.css?v=13">
+  <link rel="stylesheet" href="extra.css?v=13">
 </head>
 <body>
 
@@ -101,7 +101,8 @@
       <div class="carte"><h2 style="margin-top:0">Informations du compte</h2><div id="infos-compte"></div></div>
       <form id="f-mdp" class="carte">
         <h2 style="margin-top:0">Changer le mot de passe</h2>
-        <input name="mdp" type="password" minlength="8" placeholder="Nouveau mot de passe (8 caractères min.)" required>
+        <input name="ancien" type="password" autocomplete="current-password" placeholder="Ancien mot de passe" required>
+        <input name="mdp" type="password" minlength="8" autocomplete="new-password" placeholder="Nouveau mot de passe (8 caractères min.)" required>
         <input name="mdp2" type="password" minlength="8" placeholder="Répète le mot de passe" required>
         <button class="bouton large" style="margin-top:10px">Modifier</button>
       </form>
@@ -118,6 +119,7 @@
       </div>
       <div class="carte"><h2 style="margin-top:0">Comptes en sourdine</h2><div id="liste-sourdine"></div></div>
       <div class="carte"><h2 style="margin-top:0">Comptes bloqués</h2><div id="liste-bloques"></div></div>
+      <button class="bouton contour large" id="deconnexion" style="margin-bottom:14px">Se déconnecter</button>
     </section>
 
     <section class="page" id="notifs">
@@ -168,6 +170,12 @@
     </section>
 
     <section class="page" id="profil">
+      <div class="profil-haut">
+        <h2>Mon profil</h2>
+        <button type="button" class="cloche" id="btn-param" aria-label="Paramètres">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
+      </div>
       <div class="carte profil" id="fiche"></div>
       <form id="f-profil" class="carte">
         <h2 style="margin-top:0">Modifier mon profil</h2>
@@ -177,8 +185,6 @@
         <button class="bouton large" style="margin-top:10px">Enregistrer</button>
       </form>
             <div class="carte"><h2 style="margin-top:0">Éclairs enregistrés</h2><div id="liste-enregistres"></div></div>
-      <button type="button" class="bouton large" id="btn-param" style="margin-bottom:14px">Paramètres et statistiques</button>
-      <button class="bouton contour large" id="deconnexion">Se déconnecter</button>
     </section>
   </main>
 
@@ -310,7 +316,7 @@
 <div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=11"></script>
-<script src="app.js?v=11"></script>
+<script src="config.js?v=13"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>
