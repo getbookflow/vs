@@ -96,6 +96,7 @@ db.auth.onAuthStateChange((event, session) => {
     if (!moi || moi.id !== session.user.id) setTimeout(() => demarrer(session.user), 0);
   } else {
     moi = null;
+    if (canalNotifs) { db.removeChannel(canalNotifs); canalNotifs = null; }
     chargement($("#f-login"), false);
     chargement($("#f-signup"), false);
     ecran("auth");
@@ -106,16 +107,19 @@ async function demarrer(user) {
   const { data, error } = await db.from("profiles").select(COLS).eq("id", user.id).single();
   if (error) { chargement($("#f-login"), false); return msg("Profil introuvable. Reconnecte-toi."); }
   moi = data;
+  courriel = user.email || "";
   $("#solde").textContent = moi.abonnes;
   ecran("app");
+  ecouterNotifs();
   aller("feed");
 }
 
 // ---------- Navigation ----------
-const chargeurs = { feed: chargerFeed, duels: chargerDuels, messages: chargerMessages, notifs: chargerNotifs, classement: chargerClassement, profil: chargerProfil };
+const chargeurs = { autre: () => {}, recherche: () => {}, parametres: chargerParametres, feed: chargerFeed, duels: chargerDuels, messages: chargerMessages, notifs: chargerNotifs, classement: chargerClassement, profil: chargerProfil };
 
 function aller(nom) {
   clearInterval(minuteur);
+  if (nom !== pageActuelle) { pagePrecedente = pageActuelle; pageActuelle = nom; }
   document.body.classList.toggle("accueil", nom === "feed");
   if (nom !== "feed") document.querySelectorAll("#liste-reels video").forEach((x) => x.pause());
   const racine = document.documentElement.style;
@@ -127,11 +131,11 @@ function aller(nom) {
 }
 document.querySelectorAll(".nav button").forEach((b) => (b.onclick = () => aller(b.dataset.page)));
 
-// ---------- Accueil : stories et réels ----------
+// ---------- Accueil : stories et éclairs ----------
 let histoires = new Map();
 let vTimer;
 const lecteur = new IntersectionObserver((entrees) => entrees.forEach((en) => {
-  if (en.isIntersecting) en.target.play().catch(() => {}); else en.target.pause();
+  if (en.isIntersecting && !eco()) en.target.play().catch(() => {}); else en.target.pause();
 }), { threshold: 0.6 });
 
 const boutonSuivre = (id, suit) =>
@@ -153,15 +157,15 @@ async function chargerFeed() {
   const data = tous.filter((r) => !mutes.has(r.user_id) && !cache.has(r.id));
   box.innerHTML = data.length
     ? data.map((r) => `<article class="reel">
-        <video src="${esc(r.video_url)}#t=0.001" loop muted playsinline preload="metadata"></video>
+        <video src="${esc(r.video_url)}#t=0.001" loop muted playsinline preload="${eco() ? "none" : "metadata"}"></video>
         <button class="points3" data-type="reel" data-id="${r.id}" data-user="${r.user_id}" data-pseudo="${esc(r.profiles.pseudo)}" data-url="${esc(r.video_url)}" data-legende="${esc(r.legende)}">${ICONE3}</button>
         <div class="reel-actions">
           <button class="coeur ${r.reel_likes.some((l) => l.user_id === moi.id) ? "actif" : ""}" data-id="${r.id}" data-aime="${r.reel_likes.some((l) => l.user_id === moi.id)}"><span>♥</span><small>${r.reel_likes.length}</small></button>
           <button class="comm" data-id="${r.id}"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><small>${r.reel_comments[0]?.count ?? 0}</small></button>
         </div>
-        <div class="reel-info"><strong>@${esc(r.profiles.pseudo)}</strong><p>${esc(r.legende)}</p>
+        <div class="reel-info"><strong class="lien-profil" data-profil="${r.user_id}">@${esc(r.profiles.pseudo)}</strong><p>${esc(r.legende)}</p>
         ${r.user_id === moi.id ? "" : boutonSuivre(r.user_id, suit.has(r.user_id))}</div></article>`).join("")
-    : `<p class="secondaire">Aucun réel pour l'instant. Publie le premier !</p>`;
+    : `<p class="secondaire">Aucun éclair pour l'instant. Publie le premier !</p>`;
   box.querySelectorAll("video").forEach((v) => lecteur.observe(v));
 }
 
@@ -248,7 +252,7 @@ $("#f-reel").onsubmit = async (e) => {
   try {
     const file = fichierReel;
     if (!file || !file.type.startsWith("video/")) throw new Error("Choisis une vidéo.");
-    msg("Envoi du réel…");
+    msg("Envoi de l'éclair…");
     const url = await envoyerImage(file, true);
     const { error } = await db.from("reels").insert({ user_id: moi.id, video_url: url, legende: f.legende.value.trim() });
     if (error) throw error;
@@ -256,7 +260,7 @@ $("#f-reel").onsubmit = async (e) => {
     fichierReel = null;
     $("#nom-reel").textContent = "Aucune vidéo choisie (30 Mo max)";
     f.hidden = true;
-    msg("Réel publié !");
+    msg("Éclair publié !");
     chargerFeed();
   } catch (err) { msg(err.message); }
 };
@@ -265,15 +269,17 @@ $("#f-reel").onsubmit = async (e) => {
 $("#cloche").onclick = () => aller("notifs");
 
 async function chargerNotifs() {
+  $("#cloche").classList.remove("nouveau");
   const box = $("#liste-notifs");
-  const [f, d] = await Promise.all([
-    db.from("follows").select("created_at,profiles!follows_follower_id_fkey(pseudo)")
+  const [f, d, n] = await Promise.all([
+    db.from("follows").select("created_at,follower_id,profiles!follows_follower_id_fkey(pseudo)")
       .eq("followed_id", moi.id).order("created_at", { ascending: false }).limit(20),
     db.rpc("mes_duels_stats"),
+    db.from("notifications").select("created_at,texte").eq("user_id", moi.id).order("created_at", { ascending: false }).limit(20),
   ]);
   if (f.error || d.error) { box.textContent = "Erreur : " + (f.error || d.error).message; return; }
   const items = [];
-  f.data.forEach((x) => items.push({ t: x.created_at, h: `<strong>@${esc(x.profiles.pseudo)}</strong> s'est abonné à toi` }));
+  f.data.forEach((x) => items.push({ t: x.created_at, h: `<strong class="lien-profil" data-profil="${x.follower_id}">@${esc(x.profiles.pseudo)}</strong> s'est abonné à toi` }));
   d.data.forEach((x) => {
     const a = Number(x.votes_a), b = Number(x.votes_b), n = a + b;
     const pa = n ? Math.round((a * 100) / n) : 0;
@@ -281,6 +287,7 @@ async function chargerNotifs() {
     const etat = fini ? (a === b ? "égalité" : "gagnant : " + (a > b ? "A" : "B")) : "en cours";
     items.push({ t: x.created_at, h: `Ton duel <strong>${esc(x.titre)}</strong> : A ${pa} % · B ${n ? 100 - pa : 0} % (${n} vote${n > 1 ? "s" : ""}), ${etat}` });
   });
+  (n.data || []).forEach((x) => items.push({ t: x.created_at, h: esc(x.texte) }));
   items.sort((x, y) => new Date(y.t) - new Date(x.t));
   box.innerHTML = items.length
     ? items.map((i) => `<div class="notif">${i.h}<small>${new Date(i.t).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</small></div>`).join("")
@@ -427,12 +434,12 @@ function ouvrirChat(id, pseudo) {
 
 async function rafraichirChat() {
   if (!dest) return;
-  const { data } = await db.from("messages").select("sender_id,contenu,created_at")
+  const { data } = await db.from("messages").select("sender_id,contenu,created_at,reel_id,reels(video_url,legende)")
     .or(`and(sender_id.eq.${moi.id},receiver_id.eq.${dest.id}),and(sender_id.eq.${dest.id},receiver_id.eq.${moi.id})`)
     .order("created_at", { ascending: true }).limit(100);
   const box = $("#fil-chat");
   const bas = box.scrollTop + box.clientHeight >= box.scrollHeight - 40;
-  box.innerHTML = (data || []).map((m) => `<div class="bulle ${m.sender_id === moi.id ? "moi" : ""}">${esc(m.contenu)}</div>`).join("")
+  box.innerHTML = (data || []).map(bulle).join("")
     || `<p class="secondaire">Dis bonjour à @${esc(dest.pseudo)} !</p>`;
   if (bas) box.scrollTop = box.scrollHeight;
 }
@@ -469,7 +476,7 @@ $("#f-chat").onsubmit = async (e) => {
 
 $("#annuler-reel").onclick = () => { $("#f-reel").hidden = true; };
 
-// ---------- Créer un réel : caméra arrière, selfie ou galerie ----------
+// ---------- Créer un éclair : caméra arrière, selfie ou galerie ----------
 let fichierReel = null;
 document.querySelectorAll("[data-source]").forEach((b) => { b.onclick = () => $("#" + b.dataset.source).click(); });
 ["cam-arriere", "cam-selfie", "galerie"].forEach((id) => {
@@ -480,7 +487,7 @@ document.querySelectorAll("[data-source]").forEach((b) => { b.onclick = () => $(
   };
 });
 
-// ---------- J'aime et commentaires des réels ----------
+// ---------- J'aime et commentaires des éclairs ----------
 let reelCourant = null;
 
 document.addEventListener("click", async (e) => {
@@ -538,7 +545,7 @@ function toucherReel(video, e) {
     aimerParDoubleToucher(video.closest(".reel"), e);
   } else {
     dernierToucher = maintenant;
-    minuteurSon = setTimeout(() => { video.muted = !video.muted; }, 300);
+    minuteurSon = setTimeout(() => { if (eco() && video.paused) video.play().catch(() => {}); else video.muted = !video.muted; }, 300);
   }
 }
 
@@ -615,8 +622,8 @@ async function ouvrirMenu(b) {
   const l = [];
   if (reel && mien) l.push(["act-legende", "Modifier la légende"]);
   if (reel && !mien) l.push(["act-enregistrer", cible.enregistre ? "Retirer des enregistrements" : "Enregistrer"]);
-  if (reel) l.push(["act-partager", "Partager le lien"]);
-  if (mien) l.push(["act-supprimer", cible.type === "story" ? "Supprimer cette story" : "Supprimer ce réel"]);
+  if (reel) l.push(["act-envoyer", "Envoyer à un ami"], ["act-partager", "Partager le lien"]);
+  if (mien) l.push(["act-supprimer", cible.type === "story" ? "Supprimer cette story" : "Supprimer cet éclair"]);
   else {
     l.push(["act-suivre", (cible.suit ? "Ne plus suivre " : "Suivre ") + p]);
     if (reel) l.push(["act-pasinteresse", "Pas intéressé"]);
@@ -633,12 +640,19 @@ async function action(id) {
       + MOTIFS.map((m) => `<button class="bouton contour large" data-motif="${m}">${m}</button>`).join("");
     return;
   }
+  if (id === "act-envoyer") {
+    const { data } = await db.from("follows").select("followed_id,profiles!follows_followed_id_fkey(pseudo)").eq("follower_id", moi.id);
+    $("#menu-actions").innerHTML = data && data.length
+      ? `<p class="secondaire">Envoyer à…</p>` + data.map((x) => `<button class="bouton contour large" data-envoyer="${x.followed_id}">@${esc(x.profiles.pseudo)}</button>`).join("")
+      : `<p class="secondaire">Tu ne suis encore personne. Suis des comptes pour leur envoyer des éclairs.</p>`;
+    return;
+  }
   if (id === "act-supprimer") {
     const { error } = await db.from(c.type === "story" ? "stories" : "reels").delete().eq("id", c.id).eq("user_id", moi.id);
     if (error) return msg(error.message);
     if (c.url && c.url.includes("/medias/")) db.storage.from("medias").remove([decodeURIComponent(c.url.split("/medias/")[1].split("?")[0])]);
     $("#menu").hidden = true;
-    msg(c.type === "story" ? "Story supprimée" : "Réel supprimé");
+    msg(c.type === "story" ? "Story supprimée" : "Éclair supprimé");
     if (c.type === "story") fermerViewer();
     return chargerFeed();
   }
@@ -667,12 +681,12 @@ async function action(id) {
       ? await db.from("reel_prefs").delete().eq("user_id", moi.id).eq("reel_id", c.id).eq("kind", "saved")
       : await db.from("reel_prefs").insert({ user_id: moi.id, reel_id: c.id, kind: "saved" });
     fermerMenu();
-    return msg(error ? error.message : c.enregistre ? "Retiré des enregistrements" : "Réel enregistré, retrouve-le dans ton profil");
+    return msg(error ? error.message : c.enregistre ? "Retiré des enregistrements" : "Éclair enregistré, retrouve-le dans ton profil");
   }
   if (id === "act-partager") {
     $("#menu").hidden = true;
     try {
-      if (navigator.share) await navigator.share({ title: "Réel de @" + c.pseudo + " sur VS", url: c.url });
+      if (navigator.share) await navigator.share({ title: "Éclair de @" + c.pseudo + " sur VS", url: c.url });
       else { await navigator.clipboard.writeText(c.url); msg("Lien copié"); }
     } catch (err) { if (err.name !== "AbortError") msg("Impossible de partager ce lien."); }
     return;
@@ -694,7 +708,7 @@ async function action(id) {
     fermerMenu();
     if (error) return msg(error.message);
     document.querySelector(`.points3[data-type="reel"][data-id="${c.id}"]`)?.closest(".reel")?.remove();
-    msg("Réel masqué");
+    msg("Éclair masqué");
   }
 }
 
@@ -716,7 +730,7 @@ async function chargerSourdine() {
     ? e.data.filter((x) => x.reels).map((x) => `<div class="enregistre"><video src="${esc(x.reels.video_url)}#t=0.001" controls playsinline preload="metadata"></video>
         <div class="ligne"><span><strong>@${esc(x.reels.profiles.pseudo)}</strong> ${esc(x.reels.legende)}</span>
         <button class="bouton contour" data-retirer="${x.reel_id}">Retirer</button></div></div>`).join("")
-    : `<p class="secondaire">Aucun réel enregistré.</p>`;
+    : `<p class="secondaire">Aucun éclair enregistré.</p>`;
 }
 
 document.addEventListener("visibilitychange", () => {
@@ -730,6 +744,12 @@ document.addEventListener("click", async (e) => {
   if (e.target.closest("#annuler-menu")) return fermerMenu();
   const a = e.target.closest("#menu-actions button[id]");
   if (a) return action(a.id);
+  const env = e.target.closest("[data-envoyer]");
+  if (env) {
+    const { error } = await db.rpc("envoyer_message", { p_dest: env.dataset.envoyer, p_texte: "Éclair de @" + cible.pseudo, p_reel: cible.id });
+    msg(error ? error.message : "Envoyé !");
+    return fermerMenu();
+  }
   const mo = e.target.closest("[data-motif]");
   if (mo) {
     const c = cible;
@@ -748,3 +768,182 @@ document.addEventListener("click", async (e) => {
     chargerSourdine();
   }
 });
+
+// ---------- v7 : profils, recherche, paramètres, sons et notifications en direct ----------
+let pageActuelle = "feed", pagePrecedente = "feed", courriel = "", canalNotifs = null, audioCtx = null;
+let histoiresAutre = [], minuteurRecherche;
+const eco = () => localStorage.getItem("vs_eco") === "1";
+const miniAvatar = (p) => p.avatar_url
+  ? `<img class="avatar mini" src="${esc(p.avatar_url)}" alt="">`
+  : `<span class="avatar mini">${esc((p.pseudo || "?")[0].toUpperCase())}</span>`;
+
+function bulle(m) {
+  const moiMsg = m.sender_id === moi.id ? "moi" : "";
+  if (m.reels) {
+    return `<div class="bulle ${moiMsg}"><video src="${esc(m.reels.video_url)}#t=0.001" controls playsinline preload="metadata"></video><small>${esc(m.reels.legende)}</small></div>`;
+  }
+  return `<div class="bulle ${moiMsg}">${esc(m.contenu)}</div>`;
+}
+
+// Son de notification néon + vibration
+document.addEventListener("click", () => {
+  try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch (e) {}
+}, { once: true });
+
+function jouerSon(force = false) {
+  if (force || localStorage.getItem("vs_son") !== "0") {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      audioCtx.resume();
+      const t = audioCtx.currentTime;
+      [[659.25, 0], [880, 0.12], [1318.5, 0.24]].forEach(([f, d]) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = "sine";
+        o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t + d);
+        g.gain.exponentialRampToValueAtTime(0.18, t + d + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.45);
+        o.connect(g).connect(audioCtx.destination);
+        o.start(t + d);
+        o.stop(t + d + 0.5);
+      });
+    } catch (e) {}
+  }
+  if ((force || localStorage.getItem("vs_vibre") !== "0") && navigator.vibrate) navigator.vibrate([60, 40, 60]);
+}
+
+function alerter(texte) {
+  jouerSon();
+  msg(texte);
+  $("#cloche").classList.add("nouveau");
+}
+
+function ecouterNotifs() {
+  if (canalNotifs) return;
+  canalNotifs = db.channel("vs-notifs-" + moi.id)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: "user_id=eq." + moi.id }, (p) => alerter(p.new.texte))
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "follows", filter: "followed_id=eq." + moi.id }, async (p) => {
+      const { data } = await db.from("profiles").select("pseudo").eq("id", p.new.follower_id).single();
+      alerter("@" + (data ? data.pseudo : "Quelqu'un") + " s'est abonné à toi");
+    })
+    .subscribe();
+}
+
+// Profil d'un autre compte
+async function voirProfil(id) {
+  if (id === moi.id) return aller("profil");
+  aller("autre");
+  const box = $("#fiche-autre");
+  box.innerHTML = `<p class="secondaire">Chargement…</p>`;
+  const [p, r, s, sv] = await Promise.all([
+    db.from("profiles").select("id,pseudo,prenom,bio,avatar_url,abonnes").eq("id", id).single(),
+    db.from("reels").select("id,video_url,legende,reel_likes(count)").eq("user_id", id).order("created_at", { ascending: false }),
+    db.from("stories").select("id,user_id,media_url,type,created_at,profiles!stories_user_id_fkey(pseudo,avatar_url)")
+      .eq("user_id", id).gt("created_at", new Date(Date.now() - 864e5).toISOString()).order("created_at", { ascending: true }),
+    db.from("follows").select("followed_id").eq("follower_id", moi.id).eq("followed_id", id).maybeSingle(),
+  ]);
+  if (p.error) { box.textContent = "Profil introuvable."; return; }
+  const u = p.data, reels = r.data || [];
+  const likes = reels.reduce((n, x) => n + (x.reel_likes[0]?.count ?? 0), 0);
+  histoiresAutre = s.data || [];
+  const grand = u.avatar_url ? `<img class="avatar" src="${esc(u.avatar_url)}" alt="">` : `<div class="avatar">${esc(u.pseudo[0].toUpperCase())}</div>`;
+  box.innerHTML = `<div class="carte profil">
+      <button type="button" class="avatar-btn ${histoiresAutre.length ? "anneau" : ""}" id="avatar-autre">${grand}</button>
+      <h1>@${esc(u.pseudo)}</h1><p class="secondaire">${esc(u.prenom)}</p><p>${esc(u.bio)}</p>
+      <div class="stats">
+        <div class="stat"><strong>${u.abonnes}</strong><span>Abonnés</span></div>
+        <div class="stat"><strong>${likes}</strong><span>J'aime</span></div>
+        <div class="stat"><strong>${reels.length}</strong><span>Éclairs</span></div>
+      </div>
+      <div class="deux" style="margin-top:16px">${boutonSuivre(u.id, !!sv.data)}<button type="button" class="bouton contour" id="ecrire-autre">Message</button></div>
+    </div>
+    <h2>Éclairs</h2>
+    ${reels.length
+      ? `<div class="grille-reels">${reels.map((x) => `<button type="button" class="tuile" data-url="${esc(x.video_url)}" data-legende="${esc(x.legende)}"><video src="${esc(x.video_url)}#t=0.001" muted playsinline preload="${eco() ? "none" : "metadata"}"></video><span>♥ ${x.reel_likes[0]?.count ?? 0}</span></button>`).join("")}</div>`
+      : `<p class="secondaire">Aucun éclair publié.</p>`}`;
+  $("#ecrire-autre").onclick = () => { aller("messages"); ouvrirChat(u.id, u.pseudo); };
+  $("#avatar-autre").onclick = () => { if (histoiresAutre.length) ouvrirStory(histoiresAutre); };
+}
+
+document.addEventListener("click", (e) => {
+  const pf = e.target.closest("[data-profil]");
+  if (pf && !e.target.closest(".suivre")) return voirProfil(pf.dataset.profil);
+  if (e.target.closest("[data-retour]")) return aller(pagePrecedente === "autre" ? "feed" : pagePrecedente);
+  const t = e.target.closest(".tuile");
+  if (t) {
+    const v = $("#lecteur video");
+    v.src = t.dataset.url;
+    $("#lecteur p").textContent = t.dataset.legende;
+    $("#lecteur").hidden = false;
+    v.play().catch(() => {});
+  }
+  if (e.target.closest("#fermer-lecteur")) {
+    const v = $("#lecteur video");
+    v.pause();
+    v.removeAttribute("src");
+    $("#lecteur").hidden = true;
+  }
+});
+
+// Recherche de comptes
+$("#loupe").onclick = () => { aller("recherche"); setTimeout(() => $("#champ-recherche").focus(), 50); };
+
+$("#champ-recherche").oninput = (e) => {
+  clearTimeout(minuteurRecherche);
+  const q = e.target.value.replace(/[^A-Za-z0-9_]/g, "");
+  const box = $("#resultats-recherche");
+  if (!q) { box.innerHTML = `<p class="secondaire">Écris un pseudo pour chercher un compte.</p>`; return; }
+  minuteurRecherche = setTimeout(async () => {
+    const [{ data, error }, { data: sv }] = await Promise.all([
+      db.from("profiles").select("id,pseudo,prenom,abonnes,avatar_url").ilike("pseudo", "%" + q + "%")
+        .neq("id", moi.id).order("abonnes", { ascending: false }).limit(20),
+      db.from("follows").select("followed_id").eq("follower_id", moi.id),
+    ]);
+    const suit = new Set((sv || []).map((x) => x.followed_id));
+    box.innerHTML = error ? "Erreur : " + esc(error.message)
+      : data.length ? data.map((p) => `<div class="rang" data-profil="${p.id}" style="cursor:pointer">${miniAvatar(p)}
+          <span class="nom">@${esc(p.pseudo)}<small class="secondaire"> · ${p.abonnes} abonné${p.abonnes > 1 ? "s" : ""}</small></span>${boutonSuivre(p.id, suit.has(p.id))}</div>`).join("")
+      : `<p class="secondaire">Aucun compte trouvé.</p>`;
+  }, 300);
+};
+
+// Paramètres
+$("#btn-param").onclick = () => aller("parametres");
+$("#opt-son").onchange = (e) => localStorage.setItem("vs_son", e.target.checked ? "1" : "0");
+$("#opt-vibre").onchange = (e) => localStorage.setItem("vs_vibre", e.target.checked ? "1" : "0");
+$("#opt-eco").onchange = (e) => {
+  localStorage.setItem("vs_eco", e.target.checked ? "1" : "0");
+  msg(e.target.checked ? "Économiseur de données activé" : "Économiseur de données désactivé");
+};
+$("#test-son").onclick = () => jouerSon(true);
+
+$("#f-mdp").onsubmit = async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  if (f.mdp.value !== f.mdp2.value) return msg("Les deux mots de passe sont différents.");
+  chargement(f, true);
+  const { error } = await db.auth.updateUser({ password: f.mdp.value });
+  chargement(f, false);
+  msg(error ? error.message : "Mot de passe modifié !");
+  if (!error) f.reset();
+};
+
+async function chargerParametres() {
+  chargerSourdine();
+  $("#opt-son").checked = localStorage.getItem("vs_son") !== "0";
+  $("#opt-vibre").checked = localStorage.getItem("vs_vibre") !== "0";
+  $("#opt-eco").checked = eco();
+  $("#infos-compte").innerHTML = `<div class="ligne"><span>Pseudo</span><span>@${esc(moi.pseudo)}</span></div>
+    <div class="ligne"><span>E-mail</span><span>${esc(courriel)}</span></div>
+    <div class="ligne"><span>Membre depuis</span><span>${new Date(moi.created_at).toLocaleDateString("fr-FR")}</span></div>`;
+  const [r, d] = await Promise.all([
+    db.from("reels").select("id,reel_likes(count),reel_comments(count)").eq("user_id", moi.id),
+    db.rpc("mes_duels_stats"),
+  ]);
+  const reels = r.data || [], duels = d.data || [];
+  const somme = (cle) => reels.reduce((n, x) => n + (x[cle][0]?.count ?? 0), 0);
+  const votes = duels.reduce((n, x) => n + Number(x.votes_a) + Number(x.votes_b), 0);
+  const stat = (n, t) => `<div class="stat"><strong>${n}</strong><span>${t}</span></div>`;
+  $("#stats-compte").innerHTML = `<div class="stats">${stat(moi.abonnes, "Abonnés")}${stat(reels.length, "Éclairs")}${stat(somme("reel_likes"), "J'aime reçus")}</div>
+    <div class="stats" style="margin-top:10px">${stat(somme("reel_comments"), "Commentaires")}${stat(duels.length, "Duels lancés")}${stat(votes, "Votes reçus")}</div>`;
+}
