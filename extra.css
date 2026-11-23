@@ -169,3 +169,29 @@ body.accueil main {
 #menu-actions .bouton { margin-bottom: 8px; }
 .enregistre { margin-bottom: 14px; }
 .enregistre video { width: 100%; max-height: 50vh; border-radius: 12px; background: #000; }
+
+/* ===== v7 : profils, recherche, paramètres, notifications ===== */
+.cloche { position: relative; }
+.cloche.nouveau::after {
+  content: ""; position: absolute; top: 6px; right: 7px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--neon); box-shadow: 0 0 8px var(--neon);
+}
+.lien-profil { cursor: pointer; }
+.avatar-btn { background: none; border: none; padding: 0; cursor: pointer; display: inline-block; }
+.avatar-btn .avatar { margin: 0 auto; }
+.avatar-btn.anneau { padding: 4px; }
+.grille-reels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.tuile { position: relative; aspect-ratio: 9 / 16; padding: 0; border: none; border-radius: 10px; overflow: hidden; background: #000; cursor: pointer; }
+.tuile video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.tuile span { position: absolute; left: 6px; bottom: 6px; font-size: 0.75rem; color: var(--blanc); text-shadow: 0 0 6px #000; }
+#lecteur { position: fixed; inset: 0; z-index: 72; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 12px; background: rgba(8, 8, 13, 0.97); }
+#lecteur video { max-width: 100%; max-height: 75vh; border-radius: 14px; background: #000; }
+#lecteur .lien { align-self: flex-end; }
+input[type="checkbox"] { width: auto; margin: 0 10px 0 0; accent-color: var(--neon); }
+.rang .avatar.mini { width: 40px; height: 40px; font-size: 1rem; flex: none; }
+.bulle video { width: 100%; max-height: 40vh; border-radius: 10px; background: #000; }
+.bulle small { display: block; margin-top: 4px; opacity: 0.85; }
+@media (max-width: 400px) {
+  .entete { padding: 12px; }
+  .points { font-size: 0.8rem; padding: 6px 8px; }
+}
