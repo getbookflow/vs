@@ -47,6 +47,7 @@ $("#vers-connexion").onclick = () => { $("#f-signup").hidden = true; $("#f-login
 
 $("#f-signup").onsubmit = async (e) => {
   e.preventDefault();
+  if (!majeur(e.target.naissance.value)) return msg("VS est réservé aux personnes de 18 ans et plus.");
   chargement(e.target, true);
   const f = new FormData(e.target);
   const { error } = await db.auth.signUp({
@@ -56,7 +57,7 @@ $("#f-signup").onsubmit = async (e) => {
   });
   chargement(e.target, false);
   if (error) {
-    msg(error.message.includes("Database error") ? "Inscription impossible : pseudo déjà pris ou âge minimum de 13 ans." : error.message);
+    msg(error.message.includes("Database error") ? "Inscription impossible : pseudo déjà pris ou âge minimum de 18 ans." : error.message);
   } else {
     msg("Compte créé ! Vérifie ton e-mail, puis connecte-toi.");
     $("#vers-connexion").click();
@@ -478,7 +479,13 @@ $("#annuler-reel").onclick = () => { $("#f-reel").hidden = true; };
 
 // ---------- Créer un éclair : caméra arrière, selfie ou galerie ----------
 let fichierReel = null;
-document.querySelectorAll("[data-source]").forEach((b) => { b.onclick = () => $("#" + b.dataset.source).click(); });
+document.querySelectorAll("[data-source]").forEach((b) => {
+  b.onclick = () => {
+    const src = b.dataset.source;
+    if (src === "galerie") $("#galerie").click();
+    else ouvrirCamera(src === "cam-selfie" ? "user" : "environment", src);
+  };
+});
 ["cam-arriere", "cam-selfie", "galerie"].forEach((id) => {
   $("#" + id).onchange = (e) => {
     const f = e.target.files[0];
@@ -947,3 +954,125 @@ async function chargerParametres() {
   $("#stats-compte").innerHTML = `<div class="stats">${stat(moi.abonnes, "Abonnés")}${stat(reels.length, "Éclairs")}${stat(somme("reel_likes"), "J'aime reçus")}</div>
     <div class="stats" style="margin-top:10px">${stat(somme("reel_comments"), "Commentaires")}${stat(duels.length, "Duels lancés")}${stat(votes, "Votes reçus")}</div>`;
 }
+
+// ---------- Majorité : 18 ans minimum ----------
+function majeur(date) {
+  if (!date) return false;
+  const limite = new Date();
+  limite.setFullYear(limite.getFullYear() - 18);
+  return new Date(date) <= limite;
+}
+(() => {
+  const l = new Date();
+  l.setFullYear(l.getFullYear() - 18);
+  $("#naissance").max = l.toISOString().slice(0, 10);
+})();
+
+// ---------- Caméra VS intégrée ----------
+let flux = null, enregistreur = null, morceaux = [], faceCamera = "environment", minuteurCam = null, debutCam = 0, blocCam = null;
+
+async function ouvrirCamera(face, secours) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+    msg("Caméra intégrée indisponible ici : j'ouvre celle du téléphone.");
+    return $("#" + secours).click();
+  }
+  document.querySelectorAll("#liste-reels video").forEach((v) => v.pause());
+  faceCamera = face;
+  reinitialiserCamera();
+  $("#camera").hidden = false;
+  await demarrerFlux();
+}
+
+function reinitialiserCamera() {
+  clearInterval(minuteurCam);
+  const revoir = $("#cam-revoir");
+  revoir.pause();
+  if (revoir.src) { URL.revokeObjectURL(revoir.src); revoir.removeAttribute("src"); }
+  revoir.hidden = true;
+  $("#cam-direct").hidden = false;
+  $("#cam-pilote").hidden = false;
+  $("#cam-choix").hidden = true;
+  $("#cam-flip").hidden = false;
+  $("#cam-rec").classList.remove("en-cours");
+  $("#cam-chrono").textContent = "0:00";
+}
+
+async function demarrerFlux() {
+  arreterFlux();
+  try {
+    flux = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: faceCamera, width: { ideal: 720 }, height: { ideal: 1280 } },
+      audio: true,
+    });
+    const v = $("#cam-direct");
+    v.classList.toggle("miroir", faceCamera === "user");
+    v.srcObject = flux;
+    v.muted = true;
+    await v.play();
+  } catch (err) {
+    fermerCamera();
+    msg("Impossible d'ouvrir la caméra. Autorise-la dans les réglages du navigateur.");
+  }
+}
+
+function arreterFlux() {
+  if (flux) { flux.getTracks().forEach((t) => t.stop()); flux = null; }
+}
+
+function fermerCamera() {
+  clearInterval(minuteurCam);
+  if (enregistreur && enregistreur.state !== "inactive") { enregistreur.onstop = null; enregistreur.stop(); }
+  enregistreur = null;
+  arreterFlux();
+  reinitialiserCamera();
+  $("#camera").hidden = true;
+  reprendreReels();
+}
+
+function lancerEnregistrement() {
+  const types = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
+  const mime = types.find((t) => MediaRecorder.isTypeSupported(t));
+  morceaux = [];
+  enregistreur = new MediaRecorder(flux, mime ? { mimeType: mime, videoBitsPerSecond: 2000000 } : { videoBitsPerSecond: 2000000 });
+  enregistreur.ondataavailable = (e) => { if (e.data.size) morceaux.push(e.data); };
+  enregistreur.onstop = finEnregistrement;
+  enregistreur.start(1000);
+  debutCam = Date.now();
+  $("#cam-rec").classList.add("en-cours");
+  $("#cam-flip").hidden = true;
+  minuteurCam = setInterval(() => {
+    const sec = Math.floor((Date.now() - debutCam) / 1000);
+    $("#cam-chrono").textContent = Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+    if (sec >= 60) arreterEnregistrement();
+  }, 250);
+}
+
+function arreterEnregistrement() {
+  clearInterval(minuteurCam);
+  if (enregistreur && enregistreur.state === "recording") enregistreur.stop();
+}
+
+function finEnregistrement() {
+  $("#cam-rec").classList.remove("en-cours");
+  blocCam = new Blob(morceaux, { type: enregistreur.mimeType || "video/webm" });
+  arreterFlux();
+  const revoir = $("#cam-revoir");
+  revoir.src = URL.createObjectURL(blocCam);
+  $("#cam-direct").hidden = true;
+  revoir.hidden = false;
+  revoir.play().catch(() => {});
+  $("#cam-pilote").hidden = true;
+  $("#cam-choix").hidden = false;
+}
+
+$("#cam-rec").onclick = () => { if (enregistreur && enregistreur.state === "recording") arreterEnregistrement(); else lancerEnregistrement(); };
+$("#cam-flip").onclick = () => { faceCamera = faceCamera === "user" ? "environment" : "user"; demarrerFlux(); };
+$("#cam-fermer").onclick = fermerCamera;
+$("#cam-refaire").onclick = () => { reinitialiserCamera(); demarrerFlux(); };
+$("#cam-utiliser").onclick = () => {
+  const type = (blocCam.type || "video/webm").split(";")[0];
+  fichierReel = new File([blocCam], "eclair-" + Date.now() + "." + type.split("/")[1], { type });
+  $("#nom-reel").textContent = "Vidéo prête : filmée avec la caméra VS";
+  fermerCamera();
+  msg("Vidéo prête, appuie sur Publier l'éclair.");
+};
