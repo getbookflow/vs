@@ -47,6 +47,9 @@
   <header class="entete">
     <span class="logo">VS</span>
     <div style="display:flex;gap:8px;align-items:center">
+      <button class="cloche" id="loupe" aria-label="Rechercher">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      </button>
       <div class="points">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span id="solde">0</span> abonnés
@@ -60,7 +63,7 @@
   <main>
     <section class="page active" id="feed">
       <div class="stories" id="stories"></div>
-      <button type="button" class="bouton" id="btn-reel">+ Réel</button>
+      <button type="button" class="bouton" id="btn-reel">+ Éclair</button>
       <form id="f-reel" class="carte" style="margin-top:12px" hidden>
         <input name="legende" maxlength="150" placeholder="Légende (facultatif)">
         <div class="deux">
@@ -72,10 +75,47 @@
         <input type="file" id="cam-arriere" accept="video/*" capture="environment" hidden>
         <input type="file" id="cam-selfie" accept="video/*" capture="user" hidden>
         <input type="file" id="galerie" accept="video/*" hidden>
-        <button class="bouton large" style="margin-top:10px">Publier le réel</button>
+        <button class="bouton large" style="margin-top:10px">Publier l'éclair</button>
         <button type="button" class="lien" id="annuler-reel">Annuler</button>
       </form>
       <div id="liste-reels"></div>
+    </section>
+
+    <section class="page" id="recherche">
+      <h1>Rechercher</h1>
+      <input id="champ-recherche" placeholder="Chercher un compte…" maxlength="20" autocomplete="off">
+      <div class="carte" id="resultats-recherche" style="margin-top:12px"><p class="secondaire">Écris un pseudo pour chercher un compte.</p></div>
+    </section>
+
+    <section class="page" id="autre">
+      <button type="button" class="lien" data-retour>← Retour</button>
+      <div id="fiche-autre"></div>
+    </section>
+
+    <section class="page" id="parametres">
+      <button type="button" class="lien" data-retour>← Retour</button>
+      <h1>Paramètres</h1>
+      <div class="carte" style="margin-top:12px"><h2 style="margin-top:0">Statistiques</h2><div id="stats-compte"></div></div>
+      <div class="carte"><h2 style="margin-top:0">Informations du compte</h2><div id="infos-compte"></div></div>
+      <form id="f-mdp" class="carte">
+        <h2 style="margin-top:0">Changer le mot de passe</h2>
+        <input name="mdp" type="password" minlength="8" placeholder="Nouveau mot de passe (8 caractères min.)" required>
+        <input name="mdp2" type="password" minlength="8" placeholder="Répète le mot de passe" required>
+        <button class="bouton large" style="margin-top:10px">Modifier</button>
+      </form>
+      <div class="carte">
+        <h2 style="margin-top:0">Notifications</h2>
+        <label><input type="checkbox" id="opt-son"> Son des notifications</label>
+        <label><input type="checkbox" id="opt-vibre"> Vibration</label>
+        <button type="button" class="bouton contour" id="test-son" style="margin-top:10px">Écouter le son</button>
+      </div>
+      <div class="carte">
+        <h2 style="margin-top:0">Données mobiles</h2>
+        <label><input type="checkbox" id="opt-eco"> Économiseur de données</label>
+        <p class="secondaire">Les vidéos ne se préchargent plus et ne se lancent plus toutes seules : touche-les pour les lire.</p>
+      </div>
+      <div class="carte"><h2 style="margin-top:0">Comptes en sourdine</h2><div id="liste-sourdine"></div></div>
+      <div class="carte"><h2 style="margin-top:0">Comptes bloqués</h2><div id="liste-bloques"></div></div>
     </section>
 
     <section class="page" id="notifs">
@@ -134,9 +174,8 @@
         <label>Photo de profil</label><input name="avatar" type="file" accept="image/*">
         <button class="bouton large" style="margin-top:10px">Enregistrer</button>
       </form>
-            <div class="carte"><h2 style="margin-top:0">Réels enregistrés</h2><div id="liste-enregistres"></div></div>
-      <div class="carte"><h2 style="margin-top:0">Comptes en sourdine</h2><div id="liste-sourdine"></div></div>
-      <div class="carte"><h2 style="margin-top:0">Comptes bloqués</h2><div id="liste-bloques"></div></div>
+            <div class="carte"><h2 style="margin-top:0">Éclairs enregistrés</h2><div id="liste-enregistres"></div></div>
+      <button type="button" class="bouton large" id="btn-param" style="margin-bottom:14px">Paramètres et statistiques</button>
       <button class="bouton contour large" id="deconnexion">Se déconnecter</button>
     </section>
   </main>
@@ -175,6 +214,11 @@
 </div>
 <input type="file" id="story-input" accept="image/*,video/*" hidden>
 <div id="viewer" hidden></div>
+<div id="lecteur" hidden>
+  <button type="button" class="lien" id="fermer-lecteur">✕ Fermer</button>
+  <video controls playsinline></video>
+  <p></p>
+</div>
 <div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
