@@ -81,7 +81,7 @@ $("#oubli").onclick = async () => {
   msg(error ? error.message : "E-mail de réinitialisation envoyé.");
 };
 
-$("#deconnexion").onclick = () => db.auth.signOut();
+$("#deconnexion").onclick = () => { if (confirm("Te déconnecter de VS ?")) db.auth.signOut(); };
 
 db.auth.onAuthStateChange((event, session) => {
   if (event === "PASSWORD_RECOVERY") {
@@ -199,10 +199,11 @@ function ouvrirStory(items, i = 0) {
   v.hidden = false;
   v.innerHTML = `<div class="barres">${items.map((_, k) => `<i class="${k <= i ? "fait" : ""}"></i>`).join("")}</div>`
     + `<button class="points3" data-type="story" data-id="${s.id}" data-user="${s.user_id}" data-pseudo="${esc(s.profiles.pseudo)}" data-url="${esc(s.media_url)}">${ICONE3}</button>`
-    + (s.type === "video" ? `<video src="${esc(s.media_url)}" autoplay playsinline></video>` : `<img src="${esc(s.media_url)}" alt="">`);
+    + (s.type === "video" ? `<video src="${esc(s.media_url)}" autoplay playsinline></video>` : `<img src="${esc(s.media_url)}" alt="">`) + barreStory(s);
+  chargerLikesStory(s);
   if (s.type === "video") v.querySelector("video").onended = () => ouvrirStory(items, i + 1);
   else vTimer = setTimeout(() => ouvrirStory(items, i + 1), 5000);
-  v.onclick = (ev) => { if (!ev.target.closest(".points3")) ouvrirStory(items, i + 1); };
+  v.onclick = (ev) => { if (!ev.target.closest(".points3, .story-bas")) ouvrirStory(items, i + 1); };
 }
 
 async function basculerSuivi(id, suit) {
@@ -437,7 +438,7 @@ function ouvrirChat(id, pseudo) {
 
 async function rafraichirChat() {
   if (!dest) return;
-  const { data } = await db.from("messages").select("sender_id,contenu,created_at,reel_id,reels(video_url,legende)")
+  const { data } = await db.from("messages").select("sender_id,contenu,created_at,reel_id,reels(video_url,legende),story_id,stories(media_url,type)")
     .or(`and(sender_id.eq.${moi.id},receiver_id.eq.${dest.id}),and(sender_id.eq.${dest.id},receiver_id.eq.${moi.id})`)
     .order("created_at", { ascending: true }).limit(100);
   const box = $("#fil-chat");
@@ -790,6 +791,14 @@ const miniAvatar = (p) => p.avatar_url
 
 function bulle(m) {
   const moiMsg = m.sender_id === moi.id ? "moi" : "";
+  if (m.story_id) {
+    const media = m.stories
+      ? (m.stories.type === "video"
+        ? `<video src="${esc(m.stories.media_url)}#t=0.001" controls playsinline preload="metadata"></video>`
+        : `<img class="zoom" src="${esc(m.stories.media_url)}" alt="">`)
+      : `<small>Cette story a expiré (24 h).</small>`;
+    return `<div class="bulle ${moiMsg}">${media}<small>${esc(m.contenu)}</small></div>`;
+  }
   if (m.reels) {
     return `<div class="bulle ${moiMsg}"><video src="${esc(m.reels.video_url)}#t=0.001" controls playsinline preload="metadata"></video><small>${esc(m.reels.legende)}</small></div>`;
   }
@@ -836,6 +845,11 @@ function ecouterNotifs() {
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "follows", filter: "followed_id=eq." + moi.id }, async (p) => {
       const { data } = await db.from("profiles").select("pseudo").eq("id", p.new.follower_id).single();
       alerter("@" + (data ? data.pseudo : "Quelqu'un") + " s'est abonné à toi");
+    })
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: "receiver_id=eq." + moi.id }, async (p) => {
+      if (dest && dest.id === p.new.sender_id) return rafraichirChat();
+      const { data } = await db.from("profiles").select("pseudo").eq("id", p.new.sender_id).single();
+      alerter("Nouveau message de @" + (data ? data.pseudo : "quelqu'un"));
     })
     .subscribe();
 }
@@ -931,8 +945,11 @@ $("#test-son").onclick = () => jouerSon(true);
 $("#f-mdp").onsubmit = async (e) => {
   e.preventDefault();
   const f = e.target;
-  if (f.mdp.value !== f.mdp2.value) return msg("Les deux mots de passe sont différents.");
+  if (f.mdp.value !== f.mdp2.value) return msg("Les deux nouveaux mots de passe sont différents.");
+  if (f.ancien.value === f.mdp.value) return msg("Le nouveau mot de passe doit être différent de l'ancien.");
   chargement(f, true);
+  const verif = await db.auth.signInWithPassword({ email: courriel, password: f.ancien.value });
+  if (verif.error) { chargement(f, false); return msg("L'ancien mot de passe est incorrect."); }
   const { error } = await db.auth.updateUser({ password: f.mdp.value });
   chargement(f, false);
   msg(error ? error.message : "Mot de passe modifié !");
@@ -1441,3 +1458,78 @@ async function nettoyerMesStories() {
   if (chemins.length) await db.storage.from("medias").remove(chemins);
   await db.from("stories").delete().in("id", data.map((x) => x.id));
 }
+
+// ---------- Stories : j'aime, réponse par message, partage ----------
+const AVION = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg>';
+
+function barreStory(s) {
+  if (s.user_id === moi.id) {
+    return `<div class="story-bas"><span class="story-stats" id="story-stats">♥ 0</span><button type="button" class="story-btn partager-story" aria-label="Envoyer à un ami">${AVION}</button></div>`;
+  }
+  return `<div class="story-bas">
+    <form id="f-rep-story" autocomplete="off"><input id="rep-story" placeholder="Envoyer un message à @${esc(s.profiles.pseudo)}…" maxlength="500"></form>
+    <button type="button" class="story-btn coeur-story" id="coeur-story" aria-label="J'aime">♥</button>
+    <button type="button" class="story-btn partager-story" aria-label="Envoyer à un ami">${AVION}</button></div>`;
+}
+
+async function chargerLikesStory(s) {
+  const { data } = await db.from("story_likes").select("user_id").eq("story_id", s.id);
+  if (!storyCourante || storyCourante.items[storyCourante.i].id !== s.id) return;
+  if (s.user_id === moi.id) { const el = $("#story-stats"); if (el) el.textContent = "♥ " + (data || []).length; }
+  else { const b = $("#coeur-story"); if (b) b.classList.toggle("actif", !!(data && data.length)); }
+}
+
+async function ouvrirPartageStory(s) {
+  clearTimeout(vTimer);
+  const vv = document.querySelector("#viewer video");
+  if (vv) vv.pause();
+  cible = { type: "story", id: s.id, user: s.user_id, pseudo: s.profiles.pseudo, url: s.media_url, legende: "" };
+  const { data } = await db.from("follows").select("followed_id,profiles!follows_followed_id_fkey(pseudo)").eq("follower_id", moi.id);
+  $("#menu-actions").innerHTML = data && data.length
+    ? `<p class="secondaire">Envoyer cette story à…</p>` + data.map((x) => `<button class="bouton contour large" data-envoyer-story="${x.followed_id}">@${esc(x.profiles.pseudo)}</button>`).join("")
+    : `<p class="secondaire">Tu ne suis encore personne. Suis des comptes pour leur envoyer des stories.</p>`;
+  $("#menu").hidden = false;
+}
+
+document.addEventListener("click", async (e) => {
+  const cs = e.target.closest(".coeur-story");
+  if (cs && storyCourante) {
+    const s = storyCourante.items[storyCourante.i];
+    const aime = cs.classList.contains("actif");
+    const { error } = aime
+      ? await db.from("story_likes").delete().eq("story_id", s.id).eq("user_id", moi.id)
+      : await db.from("story_likes").insert({ story_id: s.id, user_id: moi.id });
+    if (error) return msg(error.message);
+    cs.classList.toggle("actif", !aime);
+    return;
+  }
+  const ps = e.target.closest(".partager-story");
+  if (ps && storyCourante) return ouvrirPartageStory(storyCourante.items[storyCourante.i]);
+  const envS = e.target.closest("[data-envoyer-story]");
+  if (envS) {
+    const { error } = await db.rpc("envoyer_message", { p_dest: envS.dataset.envoyerStory, p_texte: "Story de @" + cible.pseudo, p_story: cible.id });
+    msg(error ? error.message : "Envoyé !");
+    return fermerMenu();
+  }
+});
+
+document.addEventListener("submit", async (e) => {
+  if (e.target.id !== "f-rep-story") return;
+  e.preventDefault();
+  const champ = $("#rep-story"), t = champ.value.trim();
+  if (!t || !storyCourante) return;
+  const s = storyCourante.items[storyCourante.i];
+  const { error } = await db.rpc("envoyer_message", { p_dest: s.user_id, p_texte: "↩ Réponse à ta story : " + t, p_story: s.id });
+  if (error) return msg(error.message);
+  champ.value = "";
+  champ.blur();
+  msg("Message envoyé à @" + s.profiles.pseudo);
+  ouvrirStory(storyCourante.items, storyCourante.i);
+});
+
+document.addEventListener("focusin", (e) => {
+  if (e.target.id !== "rep-story") return;
+  clearTimeout(vTimer);
+  const vv = document.querySelector("#viewer video");
+  if (vv) vv.pause();
+});
