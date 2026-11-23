@@ -163,6 +163,7 @@ async function chargerFeed() {
         <div class="reel-actions">
           <button class="coeur ${r.reel_likes.some((l) => l.user_id === moi.id) ? "actif" : ""}" data-id="${r.id}" data-aime="${r.reel_likes.some((l) => l.user_id === moi.id)}"><span>♥</span><small>${r.reel_likes.length}</small></button>
           <button class="comm" data-id="${r.id}"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><small>${r.reel_comments[0]?.count ?? 0}</small></button>
+          <button class="partage" data-id="${r.id}" data-user="${r.user_id}" data-pseudo="${esc(r.profiles.pseudo)}" data-url="${esc(r.video_url)}"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></svg></span><small>Envoyer</small></button>
         </div>
         <div class="reel-info"><strong class="lien-profil" data-profil="${r.user_id}">@${esc(r.profiles.pseudo)}</strong><p>${esc(r.legende)}</p>
         ${r.user_id === moi.id ? "" : boutonSuivre(r.user_id, suit.has(r.user_id))}</div></article>`).join("")
@@ -245,7 +246,7 @@ $("#story-input").onchange = async (e) => {
   } catch (err) { msg(err.message); }
 };
 
-$("#btn-reel").onclick = () => { $("#f-reel").hidden = !$("#f-reel").hidden; };
+$("#btn-creer").onclick = () => { if (pageActuelle !== "feed") aller("feed"); $("#f-reel").hidden = !$("#f-reel").hidden; };
 
 $("#f-reel").onsubmit = async (e) => {
   e.preventDefault();
@@ -748,6 +749,8 @@ document.addEventListener("visibilitychange", () => {
 document.addEventListener("click", async (e) => {
   const p3 = e.target.closest(".points3");
   if (p3) return ouvrirMenu(p3);
+  const sh = e.target.closest(".partage");
+  if (sh) return ouvrirPartage(sh);
   if (e.target.closest("#annuler-menu")) return fermerMenu();
   const a = e.target.closest("#menu-actions button[id]");
   if (a) return action(a.id);
@@ -992,7 +995,8 @@ function reinitialiserCamera() {
   $("#cam-direct").hidden = false;
   $("#cam-pilote").hidden = false;
   $("#cam-choix").hidden = true;
-  $("#cam-flip").hidden = false;
+  $("#cam-outils").hidden = false;
+  $("#cam-durees").hidden = false;
   $("#cam-rec").classList.remove("en-cours");
   $("#cam-chrono").textContent = "0:00";
 }
@@ -1001,9 +1005,11 @@ async function demarrerFlux() {
   arreterFlux();
   try {
     flux = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: faceCamera, aspectRatio: { ideal: 9 / 16 }, width: { ideal: 1080 }, height: { ideal: 1920 } },
+      video: { facingMode: faceCamera, aspectRatio: { ideal: 9 / 16 }, width: { ideal: 720 }, height: { ideal: 1280 }, frameRate: { ideal: 30, max: 30 } },
       audio: true,
     });
+    torche = false;
+    $("#cam-flash").classList.remove("actif");
     const v = $("#cam-direct");
     v.classList.toggle("miroir", faceCamera === "user");
     v.onloadedmetadata = () => { v.style.objectFit = v.videoHeight >= v.videoWidth ? "cover" : "contain"; };
@@ -1040,20 +1046,24 @@ function fermerCamera() {
 }
 
 function lancerEnregistrement() {
-  const types = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
+  if (!flux) return;
+  const types = ["video/mp4;codecs=avc1", "video/webm;codecs=h264,opus", "video/webm;codecs=vp8,opus", "video/webm;codecs=vp9,opus", "video/webm"];
   const mime = types.find((t) => MediaRecorder.isTypeSupported(t));
   morceaux = [];
-  enregistreur = new MediaRecorder(flux, mime ? { mimeType: mime, videoBitsPerSecond: 2000000 } : { videoBitsPerSecond: 2000000 });
+  const options = { videoBitsPerSecond: 1800000 };
+  if (mime) options.mimeType = mime;
+  enregistreur = new MediaRecorder(flux, options);
   enregistreur.ondataavailable = (e) => { if (e.data.size) morceaux.push(e.data); };
   enregistreur.onstop = finEnregistrement;
   enregistreur.start(1000);
   debutCam = Date.now();
   $("#cam-rec").classList.add("en-cours");
-  $("#cam-flip").hidden = true;
+  $("#cam-outils").hidden = true;
+  $("#cam-durees").hidden = true;
   minuteurCam = setInterval(() => {
     const sec = Math.floor((Date.now() - debutCam) / 1000);
     $("#cam-chrono").textContent = Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
-    if (sec >= 60) arreterEnregistrement();
+    if (sec >= dureeMax) arreterEnregistrement();
   }, 250);
 }
 
@@ -1075,7 +1085,11 @@ function finEnregistrement() {
   $("#cam-choix").hidden = false;
 }
 
-$("#cam-rec").onclick = () => { if (enregistreur && enregistreur.state === "recording") arreterEnregistrement(); else lancerEnregistrement(); };
+$("#cam-rec").onclick = async () => {
+  if (enregistreur && enregistreur.state === "recording") return arreterEnregistrement();
+  if (delaiCam) await compteARebours(delaiCam);
+  lancerEnregistrement();
+};
 $("#cam-flip").onclick = () => { faceCamera = faceCamera === "user" ? "environment" : "user"; demarrerFlux(); };
 $("#cam-fermer").onclick = fermerCamera;
 $("#cam-refaire").onclick = () => { reinitialiserCamera(); demarrerFlux(); };
@@ -1086,18 +1100,76 @@ $("#cam-utiliser").onclick = () => {
   ouvrirMontage(fichier);
 };
 
-// ---------- Montage vidéo ----------
+// ---------- Outils de la caméra : flash, minuterie, durée ----------
+let torche = false, delaiCam = 0, dureeMax = 60;
+
+function compteARebours(n) {
+  return new Promise((ok) => {
+    const el = $("#cam-compte");
+    let i = n;
+    el.textContent = i;
+    el.hidden = false;
+    const t = setInterval(() => {
+      i--;
+      if (i <= 0 || !flux) { clearInterval(t); el.hidden = true; ok(); } else el.textContent = i;
+    }, 1000);
+  });
+}
+
+$("#cam-flash").onclick = async () => {
+  const piste = flux && flux.getVideoTracks()[0];
+  const cap = piste && piste.getCapabilities ? piste.getCapabilities() : {};
+  if (!cap.torch) return msg("Flash indisponible sur cette caméra.");
+  torche = !torche;
+  try { await piste.applyConstraints({ advanced: [{ torch: torche }] }); } catch (e) { torche = false; msg("Flash indisponible."); }
+  $("#cam-flash").classList.toggle("actif", torche);
+};
+$("#cam-minuterie").onclick = () => {
+  delaiCam = delaiCam === 0 ? 3 : delaiCam === 3 ? 10 : 0;
+  $("#cam-min-txt").textContent = delaiCam ? delaiCam + " s" : "Minuterie";
+  $("#cam-minuterie").classList.toggle("actif", delaiCam > 0);
+};
+$("#cam-durees").addEventListener("click", (e) => {
+  const p = e.target.closest("[data-duree]");
+  if (!p) return;
+  dureeMax = Number(p.dataset.duree);
+  $("#cam-durees").querySelectorAll(".puce").forEach((x) => x.classList.toggle("actif", x === p));
+});
+
+// ---------- Partager un éclair avec un ami (messagerie VS) ----------
+async function ouvrirPartage(b) {
+  cible = { type: "reel", id: b.dataset.id, user: b.dataset.user, pseudo: b.dataset.pseudo, url: b.dataset.url, legende: "" };
+  await action("act-envoyer");
+  $("#menu-actions").insertAdjacentHTML("beforeend", '<button class="bouton contour large" id="act-partager">Partager le lien hors de VS</button>');
+  $("#menu").hidden = false;
+}
+
+async function publierStory(file) {
+  try {
+    msg("Envoi de ta story…");
+    const url = await envoyerImage(file, true);
+    const type = file.type.startsWith("video/") ? "video" : "image";
+    const { error } = await db.from("stories").insert({ user_id: moi.id, media_url: url, type });
+    if (error) throw error;
+    msg("Story publiée pour 24 h !");
+    chargerStories();
+  } catch (err) { msg(err.message); }
+}
+
+// ---------- Montage vidéo (style TikTok) ----------
 const FILTRES = [["Normal", "none"], ["Néon", "sepia(.4) hue-rotate(230deg) saturate(2) contrast(1.1)"], ["Noir et blanc", "grayscale(1) contrast(1.15)"],
   ["Chaud", "sepia(.35) saturate(1.4) brightness(1.05)"], ["Froid", "sepia(.15) hue-rotate(160deg) saturate(.8)"],
   ["Vintage", "sepia(.55) contrast(.95) brightness(1.05) saturate(.85)"], ["Contraste", "contrast(1.35) saturate(1.25)"]];
 const VITESSES = [0.5, 1, 1.5, 2];
+const STICKERS = ["😂", "🔥", "💜", "⚡", "😍", "👑", "🎉", "💯", "😎", "👀"];
 const FILTRES_OK = typeof document.createElement("canvas").getContext("2d").filter === "string";
 const MONTAGE_OK = !!(window.MediaRecorder && HTMLCanvasElement.prototype.captureStream);
 let mt = null;
 
 $("#mt-filtres").innerHTML = FILTRES.map(([n, v], i) => `<button type="button" class="puce ${i === 0 ? "actif" : ""}" data-filtre="${v}">${n}</button>`).join("");
 $("#mt-vitesse").innerHTML = VITESSES.map((v) => `<button type="button" class="puce ${v === 1 ? "actif" : ""}" data-vitesse="${v}">${v}×</button>`).join("");
-if (!FILTRES_OK) $("#mt-bloc-filtres").hidden = true;
+$("#mt-stickers").innerHTML = STICKERS.map((e) => `<button type="button" class="puce emoji" data-sticker="${e}">${e}</button>`).join("") + '<button type="button" class="puce" data-sticker="">Retirer</button>';
+if (!FILTRES_OK) document.querySelector('[data-outil="filtres"]').hidden = true;
 
 function lireDuree(v) {
   return new Promise((ok) => {
@@ -1110,18 +1182,48 @@ function lireDuree(v) {
   });
 }
 
+function ajusterScene() {
+  const z = $("#mt-zone"), sc = $("#mt-scene");
+  const w = z.clientWidth, h = z.clientHeight;
+  let sh = h, sw = (h * 9) / 16;
+  if (sw > w) { sw = w; sh = (w * 16) / 9; }
+  sc.style.width = sw + "px";
+  sc.style.height = sh + "px";
+}
+window.addEventListener("resize", () => { if (mt) ajusterScene(); });
+
+function modifie() {
+  return !!mt && (mt.debut > 0.05 || mt.fin < mt.duree - 0.05 || mt.vitesse !== 1 || mt.filtre !== "none"
+    || mt.texte.trim() !== "" || mt.sticker !== "" || mt.muet || !!mt.son);
+}
 function majDuree() {
   $("#mt-lab-debut").textContent = mt.debut.toFixed(1) + " s";
   $("#mt-lab-fin").textContent = mt.fin.toFixed(1) + " s";
   $("#mt-duree").textContent = "Durée finale : " + ((mt.fin - mt.debut) / mt.vitesse).toFixed(1) + " s";
 }
-
+function placer(el, pos) { el.style.left = pos.x * 100 + "%"; el.style.top = pos.y * 100 + "%"; }
 function majTexte() {
   const t = $("#mt-texte");
-  t.textContent = $("#mt-saisie").value;
-  t.dataset.pos = mt.pos;
+  t.textContent = mt.texte;
   t.style.color = mt.couleur === "violet" ? "#A855F7" : "#fff";
+  placer(t, mt.posTexte);
 }
+function majSticker() { const t = $("#mt-sticker"); t.textContent = mt.sticker; placer(t, mt.posSticker); }
+function majSon() { $("#mt-son-nom").textContent = mt.son ? mt.son.name.slice(0, 22) : "Ajouter un son"; }
+
+function deplacable(el, cle) {
+  let actif = false;
+  el.addEventListener("pointerdown", (e) => { actif = true; el.setPointerCapture(e.pointerId); e.preventDefault(); });
+  el.addEventListener("pointermove", (e) => {
+    if (!actif || !mt) return;
+    const r = $("#mt-scene").getBoundingClientRect();
+    mt[cle] = { x: Math.min(0.95, Math.max(0.05, (e.clientX - r.left) / r.width)), y: Math.min(0.95, Math.max(0.05, (e.clientY - r.top) / r.height)) };
+    placer(el, mt[cle]);
+  });
+  ["pointerup", "pointercancel"].forEach((n) => el.addEventListener(n, () => { actif = false; }));
+}
+deplacable($("#mt-texte"), "posTexte");
+deplacable($("#mt-sticker"), "posSticker");
 
 async function ouvrirMontage(file) {
   if (!file || !file.type.startsWith("video/")) return msg("Choisis une vidéo.");
@@ -1130,13 +1232,16 @@ async function ouvrirMontage(file) {
     $("#nom-reel").textContent = "Vidéo prête : " + file.name;
     return msg("Montage indisponible sur cet appareil, la vidéo est prête.");
   }
-  mt = { file, url: URL.createObjectURL(file), debut: 0, fin: 1, vitesse: 1, filtre: "none", pos: "bas", couleur: "blanc", duree: 1 };
-  document.querySelectorAll("#montage .puce").forEach((p) => {
+  mt = { file, url: URL.createObjectURL(file), debut: 0, fin: 1, duree: 1, vitesse: 1, filtre: "none", texte: "", couleur: "blanc",
+    sticker: "", muet: false, son: null, posTexte: { x: 0.5, y: 0.8 }, posSticker: { x: 0.5, y: 0.45 } };
+  document.querySelectorAll("#mt-feuille .puce").forEach((p) => {
     const d = p.dataset;
-    p.classList.toggle("actif", [d.filtre, d.vitesse, d.pos, d.couleur].some((x) => ["none", "1", "bas", "blanc"].includes(x)));
+    p.classList.toggle("actif", d.filtre === "none" || d.vitesse === "1" || d.couleur === "blanc");
   });
   $("#mt-saisie").value = "";
   $("#mt-muet").checked = false;
+  $("#mt-feuille").hidden = true;
+  $("#mt-progres").hidden = true;
   const v = $("#mt-video");
   v.ontimeupdate = null;
   v.src = mt.url;
@@ -1144,13 +1249,13 @@ async function ouvrirMontage(file) {
   v.muted = true;
   v.playbackRate = 1;
   $("#montage").hidden = false;
+  ajusterScene();
   mt.duree = await lireDuree(v);
   mt.fin = mt.duree;
   ["mt-debut", "mt-fin"].forEach((id) => { const r = $("#" + id); r.min = 0; r.max = mt.duree; r.step = 0.1; });
   $("#mt-debut").value = 0;
   $("#mt-fin").value = mt.duree;
-  majDuree();
-  majTexte();
+  majDuree(); majTexte(); majSticker(); majSon();
   v.ontimeupdate = () => { if (v.currentTime >= mt.fin || v.currentTime < mt.debut - 0.3) v.currentTime = mt.debut; };
   v.currentTime = 0;
   v.play().catch(() => {});
@@ -1163,39 +1268,71 @@ function fermerMontage() {
   v.removeAttribute("src");
   if (mt) URL.revokeObjectURL(mt.url);
   mt = null;
+  $("#mt-feuille").hidden = true;
+  $("#mt-progres").hidden = true;
   $("#montage").hidden = true;
-  $("#mt-terminer").textContent = "Terminer";
-  document.querySelectorAll("#mt-actions button").forEach((b) => { b.disabled = false; });
 }
 
-$("#montage").addEventListener("click", (e) => {
+function ouvrirOutil(nom) {
+  document.querySelectorAll(".mt-panneau").forEach((p) => { p.hidden = p.dataset.panneau !== nom; });
+  $("#mt-feuille").hidden = false;
+  if (nom === "texte") $("#mt-saisie").focus();
+}
+$("#mt-outils").addEventListener("click", (e) => { const b = e.target.closest("[data-outil]"); if (b && mt) ouvrirOutil(b.dataset.outil); });
+$("#mt-son-pilule").onclick = () => { if (mt) ouvrirOutil("son"); };
+$("#mt-ok").onclick = () => { $("#mt-feuille").hidden = true; };
+$("#mt-feuille").addEventListener("click", (e) => {
   const p = e.target.closest(".puce");
   if (!p || !mt) return;
   p.parentElement.querySelectorAll(".puce").forEach((x) => x.classList.toggle("actif", x === p));
   const d = p.dataset;
   if (d.filtre !== undefined) { mt.filtre = d.filtre; $("#mt-video").style.filter = d.filtre; }
   if (d.vitesse) { mt.vitesse = Number(d.vitesse); $("#mt-video").playbackRate = mt.vitesse; majDuree(); }
-  if (d.pos) { mt.pos = d.pos; majTexte(); }
   if (d.couleur) { mt.couleur = d.couleur; majTexte(); }
+  if (d.sticker !== undefined) { mt.sticker = d.sticker; majSticker(); }
 });
-$("#mt-saisie").oninput = () => { if (mt) majTexte(); };
+$("#mt-saisie").oninput = (e) => { if (mt) { mt.texte = e.target.value; majTexte(); } };
 $("#mt-debut").oninput = (e) => { mt.debut = Math.min(Number(e.target.value), mt.fin - 0.5); e.target.value = mt.debut; $("#mt-video").currentTime = mt.debut; majDuree(); };
 $("#mt-fin").oninput = (e) => { mt.fin = Math.max(Number(e.target.value), mt.debut + 0.5); e.target.value = mt.fin; majDuree(); };
 $("#mt-video").onclick = (e) => { e.target.muted = !e.target.muted; };
-$("#mt-annuler").onclick = fermerMontage;
-$("#mt-passer").onclick = () => {
-  fichierReel = mt.file;
-  $("#nom-reel").textContent = "Vidéo prête : sans montage";
-  fermerMontage();
-  msg("Vidéo prête, appuie sur Publier l'éclair.");
+$("#mt-choisir-son").onclick = () => $("#mt-fichier-son").click();
+$("#mt-fichier-son").onchange = (e) => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if (!f || !mt) return;
+  if (!f.type.startsWith("audio/")) return msg("Choisis un fichier audio.");
+  mt.son = f;
+  majSon();
+  msg("Son ajouté : il sera mixé quand tu appuieras sur Suivant.");
 };
-$("#mt-terminer").onclick = exporterMontage;
+$("#mt-retirer-son").onclick = () => { if (mt) { mt.son = null; majSon(); } };
+$("#mt-muet").onchange = (e) => { if (mt) mt.muet = e.target.checked; };
+$("#mt-annuler").onclick = fermerMontage;
 
-async function exporterMontage() {
-  const W = 720, H = 1280, bouton = $("#mt-terminer"), m = mt;
-  document.querySelectorAll("#mt-actions button").forEach((b) => { b.disabled = true; });
+$("#mt-suivant").onclick = async () => {
+  const f = await terminerMontage();
+  if (!f) return;
+  fichierReel = f;
+  $("#nom-reel").textContent = "Vidéo prête (" + (f.size / 1048576).toFixed(1) + " Mo)";
+  fermerMontage();
+  if (pageActuelle !== "feed") aller("feed");
+  $("#f-reel").hidden = false;
+  msg("Ajoute une légende puis publie ton éclair.");
+};
+$("#mt-story").onclick = async () => {
+  const f = await terminerMontage();
+  if (!f) return;
+  fermerMontage();
+  publierStory(f);
+};
+
+async function terminerMontage() {
+  if (!modifie()) return mt.file;
+  const m = mt, W = 720, H = 1280;
   $("#mt-video").pause();
-  let ac = null;
+  $("#mt-progres").hidden = false;
+  $("#mt-barre-i").style.width = "0%";
+  let ac = null, audio = null;
   try {
     const ev = document.createElement("video");
     ev.src = m.url;
@@ -1205,18 +1342,26 @@ async function exporterMontage() {
     const c = document.createElement("canvas");
     c.width = W; c.height = H;
     const ctx = c.getContext("2d");
-    const flux = c.captureStream(30);
-    if (!$("#mt-muet").checked) {
+    const flux2 = c.captureStream(30);
+    if (m.muet) ev.muted = true;
+    if (!m.muet || m.son) {
       try {
         ac = new (window.AudioContext || window.webkitAudioContext)();
         const dest = ac.createMediaStreamDestination();
-        ac.createMediaElementSource(ev).connect(dest);
-        dest.stream.getAudioTracks().forEach((t) => flux.addTrack(t));
-      } catch (e) { ac = null; }
+        if (!m.muet) ac.createMediaElementSource(ev).connect(dest);
+        if (m.son) {
+          audio = new Audio(URL.createObjectURL(m.son));
+          audio.preload = "auto";
+          ac.createMediaElementSource(audio).connect(dest);
+        }
+        dest.stream.getAudioTracks().forEach((t) => flux2.addTrack(t));
+      } catch (e) { ac = null; ev.muted = true; }
     }
-    const types = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
+    const types = ["video/mp4;codecs=avc1", "video/webm;codecs=h264,opus", "video/webm;codecs=vp8,opus", "video/webm;codecs=vp9,opus", "video/webm"];
     const mime = types.find((t) => MediaRecorder.isTypeSupported(t));
-    const rec = new MediaRecorder(flux, mime ? { mimeType: mime, videoBitsPerSecond: 2500000 } : { videoBitsPerSecond: 2500000 });
+    const options = { videoBitsPerSecond: 2000000 };
+    if (mime) options.mimeType = mime;
+    const rec = new MediaRecorder(flux2, options);
     const parts = [];
     rec.ondataavailable = (e) => { if (e.data.size) parts.push(e.data); };
     const fini = new Promise((ok) => { rec.onstop = ok; });
@@ -1225,45 +1370,49 @@ async function exporterMontage() {
       await new Promise((ok) => { ev.onseeked = ok; });
     }
     ev.playbackRate = m.vitesse;
-    const texte = $("#mt-saisie").value.trim();
     const filtre = FILTRES_OK ? m.filtre : "none";
+    const texte = m.texte.trim();
     rec.start(1000);
     await ev.play();
+    if (audio) audio.play().catch(() => {});
     const dessiner = () => {
       const vw = ev.videoWidth, vh = ev.videoHeight, r = Math.max(W / vw, H / vh), dw = vw * r, dh = vh * r;
       ctx.filter = filtre;
       ctx.drawImage(ev, (W - dw) / 2, (H - dh) / 2, dw, dh);
       ctx.filter = "none";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      if (m.sticker) {
+        ctx.font = "116px sans-serif";
+        ctx.fillText(m.sticker, m.posSticker.x * W, m.posSticker.y * H);
+      }
       if (texte) {
         let taille = 64;
-        ctx.font = `800 ${taille}px Inter, "Segoe UI", sans-serif`;
-        while (ctx.measureText(texte).width > 640 && taille > 28) { taille -= 4; ctx.font = `800 ${taille}px Inter, "Segoe UI", sans-serif`; }
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
+        const police = () => `800 ${taille}px Inter, "Segoe UI", sans-serif`;
+        ctx.font = police();
+        while (ctx.measureText(texte).width > 640 && taille > 28) { taille -= 4; ctx.font = police(); }
         ctx.lineWidth = 8;
         ctx.strokeStyle = "rgba(0,0,0,0.7)";
         ctx.fillStyle = m.couleur === "violet" ? "#A855F7" : "#FFFFFF";
-        const y = { haut: 0.12, milieu: 0.5, bas: 0.85 }[m.pos] * H;
-        ctx.strokeText(texte, W / 2, y);
-        ctx.fillText(texte, W / 2, y);
+        ctx.strokeText(texte, m.posTexte.x * W, m.posTexte.y * H);
+        ctx.fillText(texte, m.posTexte.x * W, m.posTexte.y * H);
       }
-      bouton.textContent = Math.round(Math.min(1, (ev.currentTime - m.debut) / (m.fin - m.debut)) * 100) + " %";
+      const pct = Math.round(Math.min(1, (ev.currentTime - m.debut) / (m.fin - m.debut)) * 100);
+      $("#mt-barre-i").style.width = pct + "%";
+      $("#mt-progres-txt").textContent = "Montage en cours… " + pct + " %";
       if (ev.currentTime >= m.fin - 0.05 || ev.ended) { ev.pause(); rec.stop(); return; }
       requestAnimationFrame(dessiner);
     };
     dessiner();
     await fini;
+    if (audio) audio.pause();
     const type = (rec.mimeType || "video/webm").split(";")[0];
-    const blob = new Blob(parts, { type });
-    fichierReel = new File([blob], "eclair-montage-" + Date.now() + "." + type.split("/")[1], { type });
-    $("#nom-reel").textContent = "Montage prêt (" + (blob.size / 1048576).toFixed(1) + " Mo)";
-    fermerMontage();
-    msg("Montage terminé, appuie sur Publier l'éclair.");
+    return new File([new Blob(parts, { type })], "eclair-montage-" + Date.now() + "." + type.split("/")[1], { type });
   } catch (err) {
-    msg("Le montage a échoué sur cet appareil. Essaie « Sans montage ».");
-    bouton.textContent = "Terminer";
-    document.querySelectorAll("#mt-actions button").forEach((b) => { b.disabled = false; });
+    msg("Le montage a échoué sur cet appareil. Essaie avec moins d'effets.");
+    return null;
   } finally {
+    $("#mt-progres").hidden = true;
     if (ac) ac.close().catch(() => {});
   }
 }
