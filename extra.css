@@ -195,3 +195,33 @@ input[type="checkbox"] { width: auto; margin: 0 10px 0 0; accent-color: var(--ne
   .entete { padding: 12px; }
   .points { font-size: 0.8rem; padding: 6px 8px; }
 }
+
+/* ===== v8 : caméra VS ===== */
+#camera { position: fixed; inset: 0; z-index: 80; background: #000; }
+#cam-direct, #cam-revoir { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
+#cam-direct.miroir { transform: scaleX(-1); }
+.cam-rond {
+  width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  color: var(--blanc); font-size: 1.1rem; background: rgba(8, 8, 13, 0.6); border: 1px solid var(--contour);
+}
+.cam-rond svg { width: 22px; height: 22px; stroke: var(--blanc); }
+#cam-fermer { position: absolute; z-index: 2; top: calc(14px + env(safe-area-inset-top, 0px)); left: 14px; }
+#cam-chrono {
+  position: absolute; z-index: 2; top: calc(20px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
+  padding: 4px 14px; border-radius: 999px; font-weight: 700; background: rgba(8, 8, 13, 0.6); border: 1px solid var(--contour);
+}
+#cam-pilote {
+  position: absolute; z-index: 2; left: 0; right: 0; bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  display: flex; align-items: center; justify-content: center; gap: 36px;
+}
+.cam-vide { width: 48px; }
+#cam-rec {
+  width: 78px; height: 78px; border-radius: 50%; cursor: pointer; border: 4px solid var(--blanc);
+  background: radial-gradient(circle, var(--neon), var(--violet-fonce)); box-shadow: 0 0 26px rgba(168, 85, 247, 0.7);
+  transition: border-radius 0.2s ease, transform 0.2s ease;
+}
+#cam-rec.en-cours { border-radius: 22px; transform: scale(0.85); }
+#cam-choix {
+  position: absolute; z-index: 2; left: 16px; right: 16px; bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  display: flex; gap: 10px;
+}
