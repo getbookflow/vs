@@ -10,8 +10,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="VS">
   <title>VS</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="extra.css">
+  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="extra.css?v=10">
 </head>
 <body>
 
@@ -47,12 +47,15 @@
   <header class="entete">
     <span class="logo">VS</span>
     <div style="display:flex;gap:8px;align-items:center">
+      <button class="cloche" id="btn-creer" aria-label="Publier un éclair">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
       <button class="cloche" id="loupe" aria-label="Rechercher">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       </button>
       <div class="points">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span id="solde">0</span> abonnés
+        <span id="solde">0</span><span class="mot">&nbsp;abonnés</span>
       </div>
       <button class="cloche" id="cloche" aria-label="Notifications">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
@@ -63,7 +66,6 @@
   <main>
     <section class="page active" id="feed">
       <div class="stories" id="stories"></div>
-      <button type="button" class="bouton" id="btn-reel">+ Éclair</button>
       <form id="f-reel" class="carte" style="margin-top:12px" hidden>
         <input name="legende" maxlength="150" placeholder="Légende (facultatif)">
         <div class="deux">
@@ -215,36 +217,64 @@
 <input type="file" id="story-input" accept="image/*,video/*" hidden>
 <div id="viewer" hidden></div>
 <div id="montage" hidden>
-  <div class="mt-scene"><video id="mt-video" playsinline loop></video><div id="mt-texte" data-pos="bas"></div></div>
-  <div id="mt-panneau">
-    <div class="mt-bloc">
+  <div id="mt-haut">
+    <button type="button" class="cam-rond" id="mt-annuler" aria-label="Retour"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+    <button type="button" id="mt-son-pilule"><svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span id="mt-son-nom">Ajouter un son</span></button>
+    <span class="mt-vide"></span>
+  </div>
+  <div id="mt-zone">
+    <div class="mt-scene" id="mt-scene">
+      <video id="mt-video" playsinline loop></video>
+      <div id="mt-texte" class="mt-mobile"></div>
+      <div id="mt-sticker" class="mt-mobile"></div>
+      <div id="mt-outils">
+        <button type="button" data-outil="decouper"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg></span><small>Découper</small></button>
+        <button type="button" data-outil="texte"><span class="aa">Aa</span><small>Texte</small></button>
+        <button type="button" data-outil="sticker"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg></span><small>Autocollant</small></button>
+        <button type="button" data-outil="filtres"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="6"/><circle cx="15" cy="9" r="6"/><circle cx="12" cy="15" r="6"/></svg></span><small>Filtres</small></button>
+        <button type="button" data-outil="vitesse"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 14l4-4"/><path d="M3.3 17a10 10 0 1 1 17.4 0"/></svg></span><small>Vitesse</small></button>
+        <button type="button" data-outil="son"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><small>Son</small></button>
+      </div>
+    </div>
+  </div>
+  <div id="mt-feuille" hidden>
+    <div class="mt-panneau" data-panneau="decouper" hidden>
       <label>Début <span id="mt-lab-debut">0.0 s</span></label>
       <input type="range" id="mt-debut" min="0" max="1" step="0.1" value="0">
       <label>Fin <span id="mt-lab-fin">0.0 s</span></label>
       <input type="range" id="mt-fin" min="0" max="1" step="0.1" value="1">
       <p class="secondaire" id="mt-duree"></p>
     </div>
-    <div class="mt-bloc" id="mt-bloc-filtres"><label>Filtre</label><div class="mt-puces" id="mt-filtres"></div></div>
-    <div class="mt-bloc">
-      <label>Texte sur la vidéo</label>
-      <input id="mt-saisie" maxlength="40" placeholder="Ajoute un texte…" autocomplete="off">
-      <div class="mt-puces">
-        <button type="button" class="puce" data-pos="haut">Haut</button>
-        <button type="button" class="puce" data-pos="milieu">Milieu</button>
-        <button type="button" class="puce actif" data-pos="bas">Bas</button>
-      </div>
+    <div class="mt-panneau" data-panneau="texte" hidden>
+      <input id="mt-saisie" maxlength="40" placeholder="Écris ton texte…" autocomplete="off">
       <div class="mt-puces">
         <button type="button" class="puce actif" data-couleur="blanc">Blanc</button>
         <button type="button" class="puce" data-couleur="violet">Violet</button>
       </div>
+      <p class="secondaire">Glisse le texte avec ton doigt pour le placer.</p>
     </div>
-    <div class="mt-bloc"><label>Vitesse</label><div class="mt-puces" id="mt-vitesse"></div></div>
-    <div class="mt-bloc"><label><input type="checkbox" id="mt-muet"> Couper le son</label></div>
+    <div class="mt-panneau" data-panneau="sticker" hidden>
+      <div class="mt-puces" id="mt-stickers"></div>
+      <p class="secondaire">Glisse l'autocollant avec ton doigt pour le placer.</p>
+    </div>
+    <div class="mt-panneau" data-panneau="filtres" hidden><div class="mt-puces" id="mt-filtres"></div></div>
+    <div class="mt-panneau" data-panneau="vitesse" hidden><div class="mt-puces" id="mt-vitesse"></div></div>
+    <div class="mt-panneau" data-panneau="son" hidden>
+      <button type="button" class="bouton contour large" id="mt-choisir-son">Choisir un son sur le téléphone</button>
+      <button type="button" class="bouton contour large" id="mt-retirer-son" style="margin-top:8px">Retirer le son ajouté</button>
+      <label style="margin-top:12px"><input type="checkbox" id="mt-muet"> Couper le son d'origine</label>
+      <p class="secondaire">Utilise uniquement des sons dont tu as les droits.</p>
+    </div>
+    <button type="button" class="bouton large" id="mt-ok" style="margin-top:10px">OK</button>
   </div>
-  <div id="mt-actions">
-    <button type="button" class="bouton contour" id="mt-annuler">Annuler</button>
-    <button type="button" class="bouton contour" id="mt-passer">Sans montage</button>
-    <button type="button" class="bouton" id="mt-terminer">Terminer</button>
+  <div id="mt-bas">
+    <button type="button" class="bouton contour large" id="mt-story">Ta story</button>
+    <button type="button" class="bouton large" id="mt-suivant">Suivant</button>
+  </div>
+  <input type="file" id="mt-fichier-son" accept="audio/*" hidden>
+  <div id="mt-progres" hidden>
+    <div class="mt-barre"><i id="mt-barre-i"></i></div>
+    <p id="mt-progres-txt">Préparation…</p>
   </div>
 </div>
 <div id="camera" hidden>
@@ -253,12 +283,19 @@
   <button type="button" class="cam-rond" id="cam-fermer" aria-label="Fermer">✕</button>
   <span id="cam-chrono">0:00</span>
   <input type="range" id="cam-zoom" min="1" max="3" step="0.1" value="1" hidden>
+  <div id="cam-outils">
+    <button type="button" class="cam-outil" id="cam-flip"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg><small>Retourner</small></button>
+    <button type="button" class="cam-outil" id="cam-flash"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg><small>Flash</small></button>
+    <button type="button" class="cam-outil" id="cam-minuterie"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg><small id="cam-min-txt">Minuterie</small></button>
+  </div>
+  <div id="cam-durees">
+    <button type="button" class="puce" data-duree="15">15 s</button>
+    <button type="button" class="puce" data-duree="30">30 s</button>
+    <button type="button" class="puce actif" data-duree="60">60 s</button>
+  </div>
+  <div id="cam-compte" hidden></div>
   <div id="cam-pilote">
-    <button type="button" class="cam-rond" id="cam-flip" aria-label="Changer de caméra">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg>
-    </button>
     <button type="button" id="cam-rec" aria-label="Filmer"></button>
-    <span class="cam-vide"></span>
   </div>
   <div id="cam-choix" hidden>
     <button type="button" class="bouton contour large" id="cam-refaire">Refaire</button>
@@ -273,7 +310,7 @@
 <div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="config.js"></script>
-<script src="app.js"></script>
+<script src="config.js?v=10"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
