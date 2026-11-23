@@ -112,6 +112,7 @@ async function demarrer(user) {
   $("#solde").textContent = moi.abonnes;
   ecran("app");
   ecouterNotifs();
+  nettoyerMesStories();
   aller("feed");
 }
 
@@ -980,6 +981,7 @@ async function ouvrirCamera(face, secours) {
     return $("#" + secours).click();
   }
   document.querySelectorAll("#liste-reels video").forEach((v) => v.pause());
+  pleinEcran(true);
   faceCamera = face;
   reinitialiserCamera();
   $("#camera").hidden = false;
@@ -1035,14 +1037,14 @@ function arreterFlux() {
   if (flux) { flux.getTracks().forEach((t) => t.stop()); flux = null; }
 }
 
-function fermerCamera() {
+function fermerCamera(garder = false) {
   clearInterval(minuteurCam);
   if (enregistreur && enregistreur.state !== "inactive") { enregistreur.onstop = null; enregistreur.stop(); }
   enregistreur = null;
   arreterFlux();
   reinitialiserCamera();
   $("#camera").hidden = true;
-  reprendreReels();
+  if (!garder) { pleinEcran(false); reprendreReels(); }
 }
 
 function lancerEnregistrement() {
@@ -1074,15 +1076,10 @@ function arreterEnregistrement() {
 
 function finEnregistrement() {
   $("#cam-rec").classList.remove("en-cours");
-  blocCam = new Blob(morceaux, { type: enregistreur.mimeType || "video/webm" });
-  arreterFlux();
-  const revoir = $("#cam-revoir");
-  revoir.src = URL.createObjectURL(blocCam);
-  $("#cam-direct").hidden = true;
-  revoir.hidden = false;
-  revoir.play().catch(() => {});
-  $("#cam-pilote").hidden = true;
-  $("#cam-choix").hidden = false;
+  const type = (enregistreur.mimeType || "video/webm").split(";")[0];
+  const fichier = new File([new Blob(morceaux, { type })], "eclair-" + Date.now() + "." + type.split("/")[1], { type });
+  fermerCamera(true);
+  ouvrirMontage(fichier, "camera");
 }
 
 $("#cam-rec").onclick = async () => {
@@ -1091,7 +1088,7 @@ $("#cam-rec").onclick = async () => {
   lancerEnregistrement();
 };
 $("#cam-flip").onclick = () => { faceCamera = faceCamera === "user" ? "environment" : "user"; demarrerFlux(); };
-$("#cam-fermer").onclick = fermerCamera;
+$("#cam-fermer").onclick = () => fermerCamera();
 $("#cam-refaire").onclick = () => { reinitialiserCamera(); demarrerFlux(); };
 $("#cam-utiliser").onclick = () => {
   const type = (blocCam.type || "video/webm").split(";")[0];
@@ -1225,14 +1222,15 @@ function deplacable(el, cle) {
 deplacable($("#mt-texte"), "posTexte");
 deplacable($("#mt-sticker"), "posSticker");
 
-async function ouvrirMontage(file) {
+async function ouvrirMontage(file, origine = "galerie") {
+  pleinEcran(true);
   if (!file || !file.type.startsWith("video/")) return msg("Choisis une vidéo.");
   if (!MONTAGE_OK) {
     fichierReel = file;
     $("#nom-reel").textContent = "Vidéo prête : " + file.name;
     return msg("Montage indisponible sur cet appareil, la vidéo est prête.");
   }
-  mt = { file, url: URL.createObjectURL(file), debut: 0, fin: 1, duree: 1, vitesse: 1, filtre: "none", texte: "", couleur: "blanc",
+  mt = { file, origine, url: URL.createObjectURL(file), debut: 0, fin: 1, duree: 1, vitesse: 1, filtre: "none", texte: "", couleur: "blanc",
     sticker: "", muet: false, son: null, posTexte: { x: 0.5, y: 0.8 }, posSticker: { x: 0.5, y: 0.45 } };
   document.querySelectorAll("#mt-feuille .puce").forEach((p) => {
     const d = p.dataset;
@@ -1261,7 +1259,7 @@ async function ouvrirMontage(file) {
   v.play().catch(() => {});
 }
 
-function fermerMontage() {
+function fermerMontage(garder = false) {
   const v = $("#mt-video");
   v.pause();
   v.ontimeupdate = null;
@@ -1271,6 +1269,7 @@ function fermerMontage() {
   $("#mt-feuille").hidden = true;
   $("#mt-progres").hidden = true;
   $("#montage").hidden = true;
+  if (!garder) { pleinEcran(false); reprendreReels(); }
 }
 
 function ouvrirOutil(nom) {
@@ -1307,7 +1306,11 @@ $("#mt-fichier-son").onchange = (e) => {
 };
 $("#mt-retirer-son").onclick = () => { if (mt) { mt.son = null; majSon(); } };
 $("#mt-muet").onchange = (e) => { if (mt) mt.muet = e.target.checked; };
-$("#mt-annuler").onclick = fermerMontage;
+$("#mt-annuler").onclick = () => {
+  const retour = !!mt && mt.origine === "camera";
+  fermerMontage(retour);
+  if (retour) ouvrirCamera(faceCamera, faceCamera === "user" ? "cam-selfie" : "cam-arriere");
+};
 
 $("#mt-suivant").onclick = async () => {
   const f = await terminerMontage();
@@ -1415,4 +1418,26 @@ async function terminerMontage() {
     $("#mt-progres").hidden = true;
     if (ac) ac.close().catch(() => {});
   }
+}
+
+// ---------- Plein écran ----------
+function pleinEcran(on) {
+  try {
+    if (on && !document.fullscreenElement && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+    } else if (!on && document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+  } catch (e) {}
+}
+
+// ---------- Stories : 24 h seulement ----------
+async function nettoyerMesStories() {
+  const limite = new Date(Date.now() - 864e5).toISOString();
+  const { data } = await db.from("stories").select("id,media_url").eq("user_id", moi.id).lt("created_at", limite);
+  if (!data || !data.length) return;
+  const chemins = data.map((x) => x.media_url).filter((u) => u.includes("/medias/"))
+    .map((u) => decodeURIComponent(u.split("/medias/")[1].split("?")[0]));
+  if (chemins.length) await db.storage.from("medias").remove(chemins);
+  await db.from("stories").delete().in("id", data.map((x) => x.id));
 }
