@@ -355,7 +355,7 @@ async function chargerDuels() {
         else if (d.mon_vote) bas = `<p class="secondaire">Tu as voté ${d.mon_vote.toUpperCase()}</p>`;
         else bas = `<div class="deux"><button class="bouton large" data-duel="${d.id}" data-choix="a">Voter A</button>
                     <button class="bouton large contour" data-duel="${d.id}" data-choix="b">Voter B</button></div>`;
-        return `<article class="carte duel" style="position:relative"><button type="button" class="points3" data-type="duel" data-id="${d.id}" data-user="" data-pseudo="${esc(d.pseudo)}" data-url="${esc(d.image_a)}" data-url2="${esc(d.image_b)}" data-legende="${esc(d.titre)}" aria-label="Options du duel">${ICONE3}</button>
+        return `<article class="carte duel" id="carte-duel-${d.id}" style="position:relative"><button type="button" class="points3" data-type="duel" data-id="${d.id}" data-user="" data-pseudo="${esc(d.pseudo)}" data-url="${esc(d.image_a)}" data-url2="${esc(d.image_b)}" data-legende="${esc(d.titre)}" aria-label="Options du duel">${ICONE3}</button>
           <strong style="display:block;padding:0 44px">${esc(d.titre)}</strong>
           <p class="secondaire">${esc(d.categorie)}, par @${esc(d.pseudo)} — ${fini ? "terminé" : "fin le " + fin}</p>
           <div class="duel-ligne" style="margin-top:12px">
@@ -471,7 +471,7 @@ async function chargerMessages() {
   const nonLus = new Set(data.filter((m) => m.receiver_id === moi.id && !m.lu).map((m) => m.sender_id));
   const { data: profs } = await db.from("profiles").select("id,pseudo").in("id", [...vus.keys()]);
   box.innerHTML = (profs || []).map((p) => `<div class="rang conv" data-id="${p.id}" data-pseudo="${esc(p.pseudo)}">
-    <span class="nom">${nonLus.has(p.id) ? "● " : ""}@${esc(p.pseudo)}</span><span class="score">${esc(vus.get(p.id).contenu.slice(0, 28))}</span></div>`).join("");
+    <span class="nom">${nonLus.has(p.id) ? "● " : ""}@${esc(p.pseudo)}</span><span class="score">${esc(vus.get(p.id).contenu.replace(/^\[\[duel:[^\]]*\]\]\s*/, "⚔️ Duel : ").slice(0, 28))}</span></div>`).join("");
 }
 
 function ouvrirChat(id, pseudo) {
@@ -848,6 +848,8 @@ const miniAvatar = (p) => p.avatar_url
 
 function bulle(m) {
   const moiMsg = m.sender_id === moi.id ? "moi" : "";
+  const md = /^\[\[duel:([^\]]+)\]\]\s*([\s\S]*)$/.exec(m.contenu || "");
+  if (md) return `<div class="bulle ${moiMsg}" data-voir-duel="${esc(md[1])}"><strong>⚔️ Duel VS</strong><br>${esc(md[2])}<small>Touche pour voir et voter</small></div>`;
   if (m.story_id) {
     const media = m.stories
       ? (m.stories.type === "video"
@@ -1949,7 +1951,7 @@ async function ouvrirMenuDuel(b) {
   const p = "@" + esc(cible.pseudo);
   const l = [];
   if (mien) l.push(["duel-supprimer", "Supprimer ce duel"]);
-  l.push(["duel-masquer", "Masquer ce duel"], ["duel-partager", "Partager le duel"]);
+  l.push(["duel-envoyer", "Envoyer à un ami"], ["duel-masquer", "Masquer ce duel"], ["duel-partager", "Partager le lien"]);
   if (!mien) {
     l.push(["duel-suivre", (cible.suit ? "Ne plus suivre " : "Suivre ") + p],
       ["duel-sourdine", "Mettre " + p + " en sourdine"], ["act-signaler", "Signaler"], ["duel-bloquer", "Bloquer " + p]);
@@ -1961,6 +1963,7 @@ async function ouvrirMenuDuel(b) {
 async function actionDuel(id) {
   const c = cible;
   if (!c) return;
+  if (id === "duel-envoyer") return listeAmisDuel();
   $("#menu").hidden = true;
   if (id === "duel-supprimer") {
     if (!confirm("Supprimer ce duel ? Les votes seront perdus.")) return;
@@ -2021,3 +2024,44 @@ async function actionDuel(id) {
     msg("Les duels masqués sont de nouveau visibles.");
   };
 })();
+
+// ---------- v19 : envoyer un duel à un ami dans VS ----------
+(() => {
+  const st = document.createElement("style");
+  st.textContent = ".bulle[data-voir-duel] { cursor: pointer; }";
+  document.head.appendChild(st);
+})();
+
+async function listeAmisDuel() {
+  const { data } = await db.from("follows").select("followed_id,profiles!follows_followed_id_fkey(pseudo)").eq("follower_id", moi.id);
+  $("#menu-actions").innerHTML = data && data.length
+    ? `<p class="secondaire">Envoyer ce duel à…</p>` + data.map((x) => `<button class="bouton contour large" data-envoyer-duel="${x.followed_id}">@${esc(x.profiles.pseudo)}</button>`).join("")
+    : `<p class="secondaire">Tu ne suis encore personne. Suis des comptes pour leur envoyer des duels.</p>`;
+}
+
+function voirDuel(id) {
+  $("#liste-duels").innerHTML = "";
+  aller("duels");
+  let essais = 0;
+  const t = setInterval(() => {
+    const el = document.getElementById("carte-duel-" + id);
+    if (el) {
+      clearInterval(t);
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.style.boxShadow = "0 0 24px var(--neon)";
+      setTimeout(() => { el.style.boxShadow = ""; }, 2500);
+    } else if (++essais > 15) { clearInterval(t); msg("Ce duel n'est plus disponible."); }
+  }, 300);
+}
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-envoyer-duel]");
+  if (b && cible && cible.type === "duel") {
+    $("#menu").hidden = true;
+    const { error } = await db.rpc("envoyer_message", { p_dest: b.dataset.envoyerDuel, p_texte: "[[duel:" + cible.id + "]] " + cible.legende });
+    msg(error ? error.message : "Duel envoyé !");
+    return;
+  }
+  const v = e.target.closest("[data-voir-duel]");
+  if (v) voirDuel(v.dataset.voirDuel);
+});
