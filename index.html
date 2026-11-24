@@ -10,8 +10,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="VS">
   <title>VS</title>
-  <link rel="stylesheet" href="style.css?v=13">
-  <link rel="stylesheet" href="extra.css?v=13">
+  <link rel="stylesheet" href="style.css?v=14">
+  <link rel="stylesheet" href="extra.css?v=14">
 </head>
 <body>
 
@@ -59,6 +59,7 @@
       </div>
       <button class="cloche" id="cloche" aria-label="Notifications">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="badge" id="badge-notifs" hidden></span>
       </button>
     </div>
   </header>
@@ -68,12 +69,7 @@
       <div class="stories" id="stories"></div>
       <form id="f-reel" class="carte" style="margin-top:12px" hidden>
         <input name="legende" maxlength="150" placeholder="Légende (facultatif)">
-        <div class="deux">
-          <button type="button" class="bouton contour large" data-source="cam-arriere">Filmer</button>
-          <button type="button" class="bouton contour large" data-source="cam-selfie">Selfie</button>
-          <button type="button" class="bouton contour large" data-source="galerie">Galerie</button>
-        </div>
-        <p class="secondaire" id="nom-reel">Aucune vidéo choisie (30 Mo max)</p>
+                <p class="secondaire" id="nom-reel">Aucune vidéo choisie (30 Mo max)</p>
         <input type="file" id="cam-arriere" accept="video/*" capture="environment" hidden>
         <input type="file" id="cam-selfie" accept="video/*" capture="user" hidden>
         <input type="file" id="galerie" accept="video/*" hidden>
@@ -119,6 +115,7 @@
       </div>
       <div class="carte"><h2 style="margin-top:0">Comptes en sourdine</h2><div id="liste-sourdine"></div></div>
       <div class="carte"><h2 style="margin-top:0">Comptes bloqués</h2><div id="liste-bloques"></div></div>
+      <button class="bouton contour large" id="desactiver" style="margin-bottom:10px">Désactiver mon compte</button>
       <button class="bouton contour large" id="deconnexion" style="margin-bottom:14px">Se déconnecter</button>
     </section>
 
@@ -200,6 +197,7 @@
     </button>
     <button data-page="messages">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Messages
+      <span class="badge" id="badge-messages" hidden></span>
     </button>
     <button data-page="profil">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Profil
@@ -222,6 +220,22 @@
 </div>
 <input type="file" id="story-input" accept="image/*,video/*" hidden>
 <div id="viewer" hidden></div>
+<div id="ajout" hidden>
+  <div class="aj-haut">
+    <button type="button" class="cam-rond" id="aj-fermer" aria-label="Fermer">✕</button>
+    <h2 id="aj-titre">Ajouter à la story</h2>
+    <span class="mt-vide"></span>
+  </div>
+  <div class="aj-tuiles">
+    <button type="button" id="aj-camera"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>Caméra</span></button>
+    <button type="button" id="aj-photo"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>Photo</span></button>
+    <button type="button" id="aj-galerie"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>Galerie</span></button>
+    <button type="button" id="aj-texte"><b>Aa</b><span>Texte</span></button>
+  </div>
+  <p class="secondaire aj-note">« Galerie » ouvre ta galerie : tes photos et vidéos récentes sont tout en haut.</p>
+  <input type="file" id="aj-fichier" accept="image/*,video/*" hidden>
+  <input type="file" id="aj-photo-fichier" accept="image/*" capture="environment" hidden>
+</div>
 <div id="montage" hidden>
   <div id="mt-haut">
     <button type="button" class="cam-rond" id="mt-annuler" aria-label="Retour"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
@@ -231,6 +245,7 @@
   <div id="mt-zone">
     <div class="mt-scene" id="mt-scene">
       <video id="mt-video" playsinline loop></video>
+      <img id="mt-image" alt="" hidden>
       <div id="mt-texte" class="mt-mobile"></div>
       <div id="mt-sticker" class="mt-mobile"></div>
       <div id="mt-outils">
@@ -239,6 +254,7 @@
         <button type="button" data-outil="sticker"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg></span><small>Autocollant</small></button>
         <button type="button" data-outil="filtres"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="6"/><circle cx="15" cy="9" r="6"/><circle cx="12" cy="15" r="6"/></svg></span><small>Filtres</small></button>
         <button type="button" data-outil="vitesse"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 14l4-4"/><path d="M3.3 17a10 10 0 1 1 17.4 0"/></svg></span><small>Vitesse</small></button>
+        <button type="button" data-outil="enregistrer"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 21h16"/></svg></span><small>Enregistrer</small></button>
         <button type="button" data-outil="son"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><small>Son</small></button>
       </div>
     </div>
@@ -273,9 +289,10 @@
     </div>
     <button type="button" class="bouton large" id="mt-ok" style="margin-top:10px">OK</button>
   </div>
+  <input id="mt-legende" placeholder="Ajouter une légende…" maxlength="150" autocomplete="off">
   <div id="mt-bas">
     <button type="button" class="bouton contour large" id="mt-story">Ta story</button>
-    <button type="button" class="bouton large" id="mt-suivant">Suivant</button>
+    <button type="button" class="bouton large" id="mt-suivant">Publier l'éclair</button>
   </div>
   <input type="file" id="mt-fichier-son" accept="audio/*" hidden>
   <div id="mt-progres" hidden>
@@ -316,7 +333,7 @@
 <div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=13"></script>
-<script src="app.js?v=13"></script>
+<script src="config.js?v=14"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>
