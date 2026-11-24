@@ -1961,15 +1961,14 @@ async function ouvrirMenuDuel(b) {
 async function actionDuel(id) {
   const c = cible;
   if (!c) return;
+  $("#menu").hidden = true;
   if (id === "duel-supprimer") {
     if (!confirm("Supprimer ce duel ? Les votes seront perdus.")) return;
-    const { data, error } = await db.from("duels").delete().eq("id", c.id).select("id");
+    const { error } = await db.rpc("supprimer_duel", { p_duel: String(c.id) });
     if (error) return msg(error.message);
-    if (!data || !data.length) return msg("Suppression refusée par la base : ajoute la règle SQL de suppression.");
     const chemins = [c.url, c.url2].filter((u) => u && u.includes("/medias/"))
       .map((u) => decodeURIComponent(u.split("/medias/")[1].split("?")[0]));
     if (chemins.length) db.storage.from("medias").remove(chemins);
-    $("#menu").hidden = true;
     msg("Duel supprimé");
     await majProfil();
     return chargerDuels();
