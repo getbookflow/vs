@@ -818,23 +818,33 @@ document.addEventListener("click", () => {
   try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch (e) {}
 }, { once: true });
 
+let wavSon = null;
+function creerWav() {
+  const taux = 22050, notes = [[659.25, 0, 0.18], [880, 0.14, 0.18], [1318.5, 0.28, 0.4]];
+  const n = Math.floor(taux * 0.75), buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const ecrire = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  ecrire(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); ecrire(8, "WAVE"); ecrire(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, taux, true);
+  v.setUint32(28, taux * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); ecrire(36, "data"); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    const t = i / taux;
+    let x = 0;
+    for (const [f, d, long] of notes) {
+      const u = t - d;
+      if (u >= 0 && u < long) x += Math.sin(2 * Math.PI * f * u) * Math.exp(-u * 9) * Math.min(1, u * 200);
+    }
+    v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, x * 0.8)) * 32767, true);
+  }
+  return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+}
+
 function jouerSon(force = false) {
   if (force || localStorage.getItem("vs_son") !== "0") {
     try {
-      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      audioCtx.resume();
-      const t = audioCtx.currentTime;
-      [[659.25, 0], [880, 0.12], [1318.5, 0.24]].forEach(([f, d]) => {
-        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-        o.type = "sine";
-        o.frequency.value = f;
-        g.gain.setValueAtTime(0.0001, t + d);
-        g.gain.exponentialRampToValueAtTime(0.18, t + d + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.45);
-        o.connect(g).connect(audioCtx.destination);
-        o.start(t + d);
-        o.stop(t + d + 0.5);
-      });
+      wavSon = wavSon || new Audio(creerWav());
+      wavSon.volume = 1;
+      wavSon.currentTime = 0;
+      wavSon.play().catch(() => {});
     } catch (e) {}
   }
   if ((force || localStorage.getItem("vs_vibre") !== "0") && navigator.vibrate) navigator.vibrate([60, 40, 60]);
@@ -859,7 +869,7 @@ function ecouterNotifs() {
       const { data } = await db.from("profiles").select("pseudo").eq("id", p.new.sender_id).single();
       alerter("Nouveau message de @" + (data ? data.pseudo : "quelqu'un"));
     })
-    .subscribe();
+    .subscribe((statut) => { if (statut === "CHANNEL_ERROR" || statut === "TIMED_OUT") msg("Notifications en direct indisponibles pour l'instant."); });
 }
 
 // Profil d'un autre compte
