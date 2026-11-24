@@ -327,10 +327,23 @@ const media = (type, url, lettre) => type === "video"
   ? `<video class="media" src="${esc(url)}" controls playsinline preload="metadata"></video>`
   : `<img class="media zoom" src="${esc(url)}" alt="Contenu ${lettre}">`;
 
+const cleDuelsCaches = () => "vs_duels_caches_" + moi.id;
+function duelsCaches() {
+  try { return new Set(JSON.parse(localStorage.getItem(cleDuelsCaches()) || "[]")); } catch (e) { return new Set(); }
+}
+
 async function chargerDuels() {
   const box = $("#liste-duels");
-  const { data, error } = await db.rpc("duels_liste");
+  const { data: tous, error } = await db.rpc("duels_liste");
   if (error) { box.textContent = "Erreur de chargement : " + error.message; return; }
+  const caches = duelsCaches();
+  const mutes = await enSourdine();
+  let pseudosCaches = new Set();
+  if (mutes.size) {
+    const { data: pr } = await db.from("profiles").select("pseudo").in("id", [...mutes]);
+    pseudosCaches = new Set((pr || []).map((x) => x.pseudo));
+  }
+  const data = tous.filter((d) => !caches.has(String(d.id)) && !pseudosCaches.has(d.pseudo));
   box.innerHTML = data.length
     ? data.map((d) => {
         const a = Number(d.votes_a), b = Number(d.votes_b), t = a + b;
@@ -342,7 +355,8 @@ async function chargerDuels() {
         else if (d.mon_vote) bas = `<p class="secondaire">Tu as voté ${d.mon_vote.toUpperCase()}</p>`;
         else bas = `<div class="deux"><button class="bouton large" data-duel="${d.id}" data-choix="a">Voter A</button>
                     <button class="bouton large contour" data-duel="${d.id}" data-choix="b">Voter B</button></div>`;
-        return `<article class="carte duel"><strong>${esc(d.titre)}</strong>
+        return `<article class="carte duel" style="position:relative"><button type="button" class="points3" data-type="duel" data-id="${d.id}" data-user="" data-pseudo="${esc(d.pseudo)}" data-url="${esc(d.image_a)}" data-url2="${esc(d.image_b)}" data-legende="${esc(d.titre)}" aria-label="Options du duel">${ICONE3}</button>
+          <strong style="display:block;padding:0 44px">${esc(d.titre)}</strong>
           <p class="secondaire">${esc(d.categorie)}, par @${esc(d.pseudo)} — ${fini ? "terminé" : "fin le " + fin}</p>
           <div class="duel-ligne" style="margin-top:12px">
             ${media(d.type, d.image_a, "A")}<div class="vs">VS</div>${media(d.type, d.image_b, "B")}
@@ -654,6 +668,7 @@ function fermerMenu() {
 }
 
 async function ouvrirMenu(b) {
+  if (b.dataset.type === "duel") return ouvrirMenuDuel(b);
   cible = { type: b.dataset.type, id: b.dataset.id, user: b.dataset.user, pseudo: b.dataset.pseudo, url: b.dataset.url, legende: b.dataset.legende || "" };
   clearTimeout(vTimer);
   const lecteurStory = document.querySelector("#viewer video");
@@ -685,6 +700,7 @@ async function ouvrirMenu(b) {
 }
 
 async function action(id) {
+  if (id.startsWith("duel-")) return actionDuel(id);
   const c = cible;
   if (id === "act-signaler") {
     $("#menu-actions").innerHTML = `<p class="secondaire">Pourquoi signales-tu ce contenu ?</p>`
@@ -1915,4 +1931,94 @@ document.querySelector(".entete .logo").onclick = actualiser;
     if (input.form) input.form.addEventListener("reset", () => setTimeout(maj, 0));
   }
   document.querySelectorAll('input[type="file"]').forEach(ameliorerFichier);
+})();
+
+// ---------- v18 : menu trois points des duels ----------
+async function ouvrirMenuDuel(b) {
+  cible = { type: "duel", id: b.dataset.id, user: "", pseudo: b.dataset.pseudo, url: b.dataset.url, url2: b.dataset.url2, legende: b.dataset.legende || "", suit: false };
+  const mien = cible.pseudo === moi.pseudo;
+  if (mien) cible.user = moi.id;
+  else {
+    const { data: pr } = await db.from("profiles").select("id").eq("pseudo", cible.pseudo).maybeSingle();
+    cible.user = pr ? pr.id : "";
+    if (cible.user) {
+      const r = await db.from("follows").select("followed_id").eq("follower_id", moi.id).eq("followed_id", cible.user).maybeSingle();
+      cible.suit = !!r.data;
+    }
+  }
+  const p = "@" + esc(cible.pseudo);
+  const l = [];
+  if (mien) l.push(["duel-supprimer", "Supprimer ce duel"]);
+  l.push(["duel-masquer", "Masquer ce duel"], ["duel-partager", "Partager le duel"]);
+  if (!mien) {
+    l.push(["duel-suivre", (cible.suit ? "Ne plus suivre " : "Suivre ") + p],
+      ["duel-sourdine", "Mettre " + p + " en sourdine"], ["act-signaler", "Signaler"], ["duel-bloquer", "Bloquer " + p]);
+  }
+  $("#menu-actions").innerHTML = l.map(([id, t]) => `<button class="bouton ${id === "duel-supprimer" ? "" : "contour"} large" id="${id}">${t}</button>`).join("");
+  $("#menu").hidden = false;
+}
+
+async function actionDuel(id) {
+  const c = cible;
+  if (!c) return;
+  if (id === "duel-supprimer") {
+    if (!confirm("Supprimer ce duel ? Les votes seront perdus.")) return;
+    const { data, error } = await db.from("duels").delete().eq("id", c.id).select("id");
+    if (error) return msg(error.message);
+    if (!data || !data.length) return msg("Suppression refusée par la base : ajoute la règle SQL de suppression.");
+    const chemins = [c.url, c.url2].filter((u) => u && u.includes("/medias/"))
+      .map((u) => decodeURIComponent(u.split("/medias/")[1].split("?")[0]));
+    if (chemins.length) db.storage.from("medias").remove(chemins);
+    $("#menu").hidden = true;
+    msg("Duel supprimé");
+    await majProfil();
+    return chargerDuels();
+  }
+  if (id === "duel-masquer") {
+    const liste = duelsCaches();
+    liste.add(String(c.id));
+    localStorage.setItem(cleDuelsCaches(), JSON.stringify([...liste]));
+    $("#menu").hidden = true;
+    msg("Duel masqué");
+    return chargerDuels();
+  }
+  if (id === "duel-partager") {
+    $("#menu").hidden = true;
+    const lien = location.href.split("#")[0];
+    try {
+      if (navigator.share) await navigator.share({ title: "Duel VS : " + c.legende, text: "Vote pour le duel « " + c.legende + " » sur VS", url: lien });
+      else { await navigator.clipboard.writeText(lien); msg("Lien copié"); }
+    } catch (err) { if (err.name !== "AbortError") msg("Impossible de partager ce duel."); }
+    return;
+  }
+  if (!c.user) return msg("Compte introuvable.");
+  if (id === "duel-suivre") {
+    const error = await basculerSuivi(c.user, c.suit);
+    $("#menu").hidden = true;
+    return msg(error ? error.message : c.suit ? "Tu ne suis plus @" + c.pseudo : "Tu suis @" + c.pseudo);
+  }
+  if (id === "duel-sourdine" || id === "duel-bloquer") {
+    const bloquer = id === "duel-bloquer";
+    if (bloquer && !confirm("Bloquer @" + c.pseudo + " ? Tu ne verras plus ses contenus et il ne pourra plus t'écrire.")) return;
+    const { error } = bloquer
+      ? await db.from("blocked_users").insert({ user_id: moi.id, blocked_id: c.user })
+      : await db.from("muted_users").insert({ user_id: moi.id, muted_id: c.user });
+    if (error) return msg(error.message);
+    $("#menu").hidden = true;
+    msg("@" + c.pseudo + (bloquer ? " est bloqué." : " est en sourdine."));
+    return chargerDuels();
+  }
+}
+
+// Réafficher les duels masqués (Paramètres)
+(() => {
+  const carte = document.createElement("div");
+  carte.className = "carte";
+  carte.innerHTML = '<h2 style="margin-top:0">Duels masqués</h2><p class="secondaire">Les duels que tu as masqués ne s\'affichent plus.</p><button type="button" class="bouton contour" id="reafficher-duels">Réafficher les duels masqués</button>';
+  $("#desactiver").before(carte);
+  $("#reafficher-duels").onclick = () => {
+    if (!moi) return;
+    localStorage.removeItem(cleDuelsCaches());
+    msg("Les duels masqués sont de nouveau visibles.");
+  };
 })();
