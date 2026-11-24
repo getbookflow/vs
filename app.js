@@ -139,7 +139,7 @@ document.querySelectorAll(".nav button").forEach((b) => (b.onclick = () => aller
 let histoires = new Map();
 let vTimer;
 const lecteur = new IntersectionObserver((entrees) => entrees.forEach((en) => {
-  if (en.isIntersecting && !eco()) en.target.play().catch(() => {}); else en.target.pause();
+  if (en.isIntersecting && !eco() && $("#viewer").hidden) en.target.play().catch(() => {}); else en.target.pause();
 }), { threshold: 0.6 });
 
 const boutonSuivre = (id, suit) =>
@@ -194,8 +194,10 @@ async function chargerStories() {
 function ouvrirStory(items, i = 0) {
   const v = $("#viewer");
   clearTimeout(vTimer);
-  document.querySelectorAll("#liste-reels video").forEach((x) => x.pause());
-  if (i >= items.length) { v.hidden = true; v.innerHTML = ""; reprendreReels(); return; }
+  // Le son de l'accueil s'arrête dès qu'une story s'ouvre
+  lecteur.disconnect();
+  document.querySelectorAll("#liste-reels video").forEach((x) => { x.pause(); x.muted = true; });
+  if (i >= items.length) { fermerViewer(); return; }
   const s = items[i];
   storyCourante = { items, i };
   v.hidden = false;
@@ -205,7 +207,11 @@ function ouvrirStory(items, i = 0) {
   chargerLikesStory(s);
   if (s.type === "video") v.querySelector("video").onended = () => ouvrirStory(items, i + 1);
   else vTimer = setTimeout(() => ouvrirStory(items, i + 1), 5000);
-  v.onclick = (ev) => { if (!ev.target.closest(".points3, .story-bas")) ouvrirStory(items, i + 1); };
+  v.onclick = (ev) => {
+    if (ev.target.closest(".points3, .story-bas")) return;
+    if (!$("#menu").hidden) return fermerMenu();
+    ouvrirStory(items, i + 1);
+  };
 }
 
 async function basculerSuivi(id, suit) {
@@ -369,17 +375,25 @@ async function chargerClassement() {
 }
 
 // ---------- Profil et portefeuille ----------
+const ICONE_CRAYON = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+
 async function chargerProfil() {
   await majProfil();
   const avatar = moi.avatar_url
     ? `<img class="avatar" src="${esc(moi.avatar_url)}" alt="">`
     : `<div class="avatar">${esc(moi.pseudo[0].toUpperCase())}</div>`;
-  $("#fiche").innerHTML = `${avatar}<h1>@${esc(moi.pseudo)}</h1><p class="secondaire">${esc(moi.prenom)}</p>
+  $("#fiche").innerHTML = `<div class="avatar-edit">${avatar}<button type="button" class="crayon" id="btn-crayon" aria-label="Modifier le profil">${ICONE_CRAYON}</button></div>
+    <h1>@${esc(moi.pseudo)}</h1><p class="secondaire">${esc(moi.prenom)}</p>
     <p>${esc(moi.bio) || '<span class="secondaire">Pas encore de description</span>'}</p>
     <div class="stats"><div class="stat"><strong>${moi.abonnes}</strong><span>Abonnés</span></div></div>`;
   const f = $("#f-profil");
+  f.hidden = true;
   f.prenom.value = moi.prenom;
   f.bio.value = moi.bio;
+  $("#btn-crayon").onclick = () => {
+    f.hidden = false;
+    f.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
   chargerSourdine();
 }
 
@@ -396,6 +410,8 @@ $("#f-profil").onsubmit = async (e) => {
     chargerProfil();
   } catch (err) { msg(err.message); }
 };
+
+$("#annuler-profil").onclick = () => { $("#f-profil").hidden = true; };
 
 // ---------- Agrandir les photos ----------
 document.addEventListener("click", (e) => {
@@ -609,6 +625,7 @@ function reprendreReels() {
 
 function fermerViewer() {
   clearTimeout(vTimer);
+  $("#menu").hidden = true;
   $("#viewer").hidden = true;
   $("#viewer").innerHTML = "";
   storyCourante = null;
@@ -1707,3 +1724,59 @@ $("#desactiver").onclick = async () => {
   await db.auth.signOut();
   msg("Compte désactivé. À bientôt !");
 };
+
+// ---------- v15 : balayage pour changer de page et revenir en arrière ----------
+const ORDRE_PAGES = ["feed", "duels", "classement", "messages", "profil"];
+let swipe = null;
+
+function surcoucheOuverte() {
+  return ["#viewer", "#camera", "#montage", "#ajout", "#menu", "#commentaires", "#lecteur", "#lightbox", "#f-reel"]
+    .some((s) => { const el = $(s); return !!el && !el.hidden; });
+}
+
+function retourArriere() {
+  if (pageActuelle === "messages" && !$("#chat").hidden) return chargerMessages();
+  if (["autre", "parametres", "recherche", "notifs"].includes(pageActuelle)) return aller(pagePrecedente === "autre" ? "feed" : pagePrecedente);
+  const i = ORDRE_PAGES.indexOf(pageActuelle);
+  if (i > 0) aller(ORDRE_PAGES[i - 1]);
+}
+
+function pageSuivante() {
+  if (pageActuelle === "messages" && !$("#chat").hidden) return;
+  const i = ORDRE_PAGES.indexOf(pageActuelle);
+  if (i >= 0 && i < ORDRE_PAGES.length - 1) aller(ORDRE_PAGES[i + 1]);
+}
+
+(() => {
+  const zone = document.querySelector("main");
+  zone.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1 || surcoucheOuverte() || e.target.closest(".stories, input, textarea, select, .mt-puces, video[controls]")) { swipe = null; return; }
+    const t = e.touches[0];
+    swipe = { x: t.clientX, y: t.clientY, t: Date.now() };
+  }, { passive: true });
+  zone.addEventListener("touchend", (e) => {
+    if (!swipe) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - swipe.x, dy = t.clientY - swipe.y, duree = Date.now() - swipe.t;
+    swipe = null;
+    if (duree > 700 || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
+    if (dx > 0) retourArriere(); else pageSuivante();
+  }, { passive: true });
+})();
+
+// ---------- v15 : glisser vers le bas pour quitter une story ----------
+(() => {
+  const v = $("#viewer");
+  let depart = null;
+  v.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1 || e.target.closest(".story-bas")) { depart = null; return; }
+    depart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, { passive: true });
+  v.addEventListener("touchend", (e) => {
+    if (!depart) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - depart.x, dy = t.clientY - depart.y;
+    depart = null;
+    if (dy > 100 && Math.abs(dx) < 70) fermerViewer();
+  }, { passive: true });
+})();
