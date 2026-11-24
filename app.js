@@ -113,6 +113,8 @@ async function demarrer(user) {
   ecran("app");
   ecouterNotifs();
   nettoyerMesStories();
+  reactiverSiBesoin(user.id);
+  majBadges();
   aller("feed");
 }
 
@@ -174,7 +176,7 @@ async function chargerFeed() {
 
 async function chargerStories() {
   const { data } = await db.from("stories")
-    .select("id,user_id,media_url,type,created_at,profiles!stories_user_id_fkey(pseudo,avatar_url)")
+    .select("id,user_id,media_url,type,legende,created_at,profiles!stories_user_id_fkey(pseudo,avatar_url)")
     .gt("created_at", new Date(Date.now() - 864e5).toISOString()).order("created_at", { ascending: true });
   histoires = new Map();
   const mutes = await enSourdine();
@@ -199,7 +201,7 @@ function ouvrirStory(items, i = 0) {
   v.hidden = false;
   v.innerHTML = `<div class="barres">${items.map((_, k) => `<i class="${k <= i ? "fait" : ""}"></i>`).join("")}</div>`
     + `<button class="points3" data-type="story" data-id="${s.id}" data-user="${s.user_id}" data-pseudo="${esc(s.profiles.pseudo)}" data-url="${esc(s.media_url)}">${ICONE3}</button>`
-    + (s.type === "video" ? `<video src="${esc(s.media_url)}" autoplay playsinline></video>` : `<img src="${esc(s.media_url)}" alt="">`) + barreStory(s);
+    + (s.type === "video" ? `<video src="${esc(s.media_url)}" autoplay playsinline></video>` : `<img src="${esc(s.media_url)}" alt="">`) + legendeStory(s) + barreStory(s);
   chargerLikesStory(s);
   if (s.type === "video") v.querySelector("video").onended = () => ouvrirStory(items, i + 1);
   else vTimer = setTimeout(() => ouvrirStory(items, i + 1), 5000);
@@ -228,7 +230,7 @@ document.addEventListener("click", async (e) => {
   }
   const rv = e.target.closest(".reel video");
   if (rv) { toucherReel(rv, e); return; }
-  if (e.target.closest("#ajout-story")) { $("#story-input").click(); return; }
+  if (e.target.closest("#ajout-story")) { ouvrirAjout("story"); return; }
   const st = e.target.closest(".story[data-id]");
   if (st && histoires.has(st.dataset.id)) ouvrirStory(histoires.get(st.dataset.id).items);
 });
@@ -248,7 +250,7 @@ $("#story-input").onchange = async (e) => {
   } catch (err) { msg(err.message); }
 };
 
-$("#btn-creer").onclick = () => { if (pageActuelle !== "feed") aller("feed"); $("#f-reel").hidden = !$("#f-reel").hidden; };
+$("#btn-creer").onclick = () => ouvrirAjout("eclair");
 
 $("#f-reel").onsubmit = async (e) => {
   e.preventDefault();
@@ -273,7 +275,7 @@ $("#f-reel").onsubmit = async (e) => {
 $("#cloche").onclick = () => aller("notifs");
 
 async function chargerNotifs() {
-  $("#cloche").classList.remove("nouveau");
+  marquerNotifsVues();
   const box = $("#liste-notifs");
   const [f, d, n] = await Promise.all([
     db.from("follows").select("created_at,follower_id,profiles!follows_follower_id_fkey(pseudo)")
@@ -359,7 +361,7 @@ $("#f-duel").onsubmit = async (e) => {
 
 // ---------- Classement ----------
 async function chargerClassement() {
-  const { data, error } = await db.from("profiles").select("pseudo,abonnes").order("abonnes", { ascending: false }).limit(100);
+  const { data, error } = await db.from("profiles").select("pseudo,abonnes").eq("desactive", false).order("abonnes", { ascending: false }).limit(100);
   $("#liste-classement").innerHTML = error
     ? "Erreur de chargement : " + error.message
     : data.map((p, i) => `<div class="rang ${i === 0 ? "premier" : ""}"><span class="numero">${i + 1}</span>
@@ -411,7 +413,7 @@ async function chargerMessages() {
   $("#chat").hidden = true;
   $("#conversations").hidden = false;
   const box = $("#liste-conv");
-  const { data, error } = await db.from("messages").select("sender_id,receiver_id,contenu,created_at")
+  const { data, error } = await db.from("messages").select("sender_id,receiver_id,contenu,created_at,lu")
     .order("created_at", { ascending: false }).limit(200);
   if (error) { box.textContent = "Erreur : " + error.message; return; }
   const vus = new Map();
@@ -420,9 +422,10 @@ async function chargerMessages() {
     if (!vus.has(autre)) vus.set(autre, m);
   });
   if (!vus.size) { box.innerHTML = `<p class="secondaire">Aucune conversation. Cherche un pseudo ci-dessus.</p>`; return; }
+  const nonLus = new Set(data.filter((m) => m.receiver_id === moi.id && !m.lu).map((m) => m.sender_id));
   const { data: profs } = await db.from("profiles").select("id,pseudo").in("id", [...vus.keys()]);
   box.innerHTML = (profs || []).map((p) => `<div class="rang conv" data-id="${p.id}" data-pseudo="${esc(p.pseudo)}">
-    <span class="nom">@${esc(p.pseudo)}</span><span class="score">${esc(vus.get(p.id).contenu.slice(0, 28))}</span></div>`).join("");
+    <span class="nom">${nonLus.has(p.id) ? "● " : ""}@${esc(p.pseudo)}</span><span class="score">${esc(vus.get(p.id).contenu.slice(0, 28))}</span></div>`).join("");
 }
 
 function ouvrirChat(id, pseudo) {
@@ -431,6 +434,8 @@ function ouvrirChat(id, pseudo) {
   $("#chat").hidden = false;
   $("#chat-titre").textContent = "@" + pseudo;
   $("#fil-chat").innerHTML = "";
+  cleChat = "";
+  marquerLus();
   rafraichirChat();
   clearInterval(minuteur);
   minuteur = setInterval(rafraichirChat, 4000);
@@ -438,10 +443,13 @@ function ouvrirChat(id, pseudo) {
 
 async function rafraichirChat() {
   if (!dest) return;
-  const { data } = await db.from("messages").select("sender_id,contenu,created_at,reel_id,reels(video_url,legende),story_id,stories(media_url,type)")
+  const { data } = await db.from("messages").select("id,sender_id,contenu,created_at,reel_id,reels(video_url,legende),story_id,stories(media_url,type)")
     .or(`and(sender_id.eq.${moi.id},receiver_id.eq.${dest.id}),and(sender_id.eq.${dest.id},receiver_id.eq.${moi.id})`)
     .order("created_at", { ascending: true }).limit(100);
+  const cle = (data || []).map((m) => m.id).join(",");
   const box = $("#fil-chat");
+  if (cle === cleChat && box.innerHTML) return;
+  cleChat = cle;
   const bas = box.scrollTop + box.clientHeight >= box.scrollHeight - 40;
   box.innerHTML = (data || []).map(bulle).join("")
     || `<p class="secondaire">Dis bonjour à @${esc(dest.pseudo)} !</p>`;
@@ -459,7 +467,7 @@ $("#f-recherche").onsubmit = async (e) => {
   e.preventDefault();
   const q = e.target.q.value.replace(/[^A-Za-z0-9_]/g, "");
   if (!q) return;
-  const { data, error } = await db.from("profiles").select("id,pseudo").ilike("pseudo", "%" + q + "%").neq("id", moi.id).limit(10);
+  const { data, error } = await db.from("profiles").select("id,pseudo").eq("desactive", false).ilike("pseudo", "%" + q + "%").neq("id", moi.id).limit(10);
   const { data: sv } = await db.from("follows").select("followed_id").eq("follower_id", moi.id);
   const suit = new Set((sv || []).map((x) => x.followed_id));
   $("#resultats").innerHTML = error ? "Erreur : " + esc(error.message)
@@ -835,7 +843,7 @@ function jouerSon(force = false) {
 function alerter(texte) {
   jouerSon();
   msg(texte);
-  $("#cloche").classList.add("nouveau");
+  if (pageActuelle === "notifs") chargerNotifs(); else majBadges();
 }
 
 function ecouterNotifs() {
@@ -861,14 +869,15 @@ async function voirProfil(id) {
   const box = $("#fiche-autre");
   box.innerHTML = `<p class="secondaire">Chargement…</p>`;
   const [p, r, s, sv] = await Promise.all([
-    db.from("profiles").select("id,pseudo,prenom,bio,avatar_url,abonnes").eq("id", id).single(),
+    db.from("profiles").select("id,pseudo,prenom,bio,avatar_url,abonnes,desactive").eq("id", id).single(),
     db.from("reels").select("id,video_url,legende,reel_likes(count)").eq("user_id", id).order("created_at", { ascending: false }),
-    db.from("stories").select("id,user_id,media_url,type,created_at,profiles!stories_user_id_fkey(pseudo,avatar_url)")
+    db.from("stories").select("id,user_id,media_url,type,legende,created_at,profiles!stories_user_id_fkey(pseudo,avatar_url)")
       .eq("user_id", id).gt("created_at", new Date(Date.now() - 864e5).toISOString()).order("created_at", { ascending: true }),
     db.from("follows").select("followed_id").eq("follower_id", moi.id).eq("followed_id", id).maybeSingle(),
   ]);
   if (p.error) { box.textContent = "Profil introuvable."; return; }
   const u = p.data, reels = r.data || [];
+  if (u.desactive) { box.innerHTML = '<p class="secondaire">Ce compte est désactivé.</p>'; return; }
   const likes = reels.reduce((n, x) => n + (x.reel_likes[0]?.count ?? 0), 0);
   histoiresAutre = s.data || [];
   const grand = u.avatar_url ? `<img class="avatar" src="${esc(u.avatar_url)}" alt="">` : `<div class="avatar">${esc(u.pseudo[0].toUpperCase())}</div>`;
@@ -920,7 +929,7 @@ $("#champ-recherche").oninput = (e) => {
   if (!q) { box.innerHTML = `<p class="secondaire">Écris un pseudo pour chercher un compte.</p>`; return; }
   minuteurRecherche = setTimeout(async () => {
     const [{ data, error }, { data: sv }] = await Promise.all([
-      db.from("profiles").select("id,pseudo,prenom,abonnes,avatar_url").ilike("pseudo", "%" + q + "%")
+      db.from("profiles").select("id,pseudo,prenom,abonnes,avatar_url").eq("desactive", false).ilike("pseudo", "%" + q + "%")
         .neq("id", moi.id).order("abonnes", { ascending: false }).limit(20),
       db.from("follows").select("followed_id").eq("follower_id", moi.id),
     ]);
@@ -1158,12 +1167,12 @@ async function ouvrirPartage(b) {
   $("#menu").hidden = false;
 }
 
-async function publierStory(file) {
+async function publierStory(file, legende = "") {
   try {
     msg("Envoi de ta story…");
     const url = await envoyerImage(file, true);
     const type = file.type.startsWith("video/") ? "video" : "image";
-    const { error } = await db.from("stories").insert({ user_id: moi.id, media_url: url, type });
+    const { error } = await db.from("stories").insert({ user_id: moi.id, media_url: url, type, legende: legende.trim().slice(0, 150) });
     if (error) throw error;
     msg("Story publiée pour 24 h !");
     chargerStories();
@@ -1241,30 +1250,46 @@ deplacable($("#mt-sticker"), "posSticker");
 
 async function ouvrirMontage(file, origine = "galerie") {
   pleinEcran(true);
-  if (!file || !file.type.startsWith("video/")) return msg("Choisis une vidéo.");
-  if (!MONTAGE_OK) {
-    fichierReel = file;
-    $("#nom-reel").textContent = "Vidéo prête : " + file.name;
-    return msg("Montage indisponible sur cet appareil, la vidéo est prête.");
+  const photo = !!file && file.type.startsWith("image/") && modeAjout === "story";
+  if (!file || !(photo || file.type.startsWith("video/"))) return msg(modeAjout === "story" ? "Choisis une photo ou une vidéo." : "Choisis une vidéo.");
+  if (!MONTAGE_OK && !photo) {
+    msg("Montage indisponible sur cet appareil : publication directe.");
+    return modeAjout === "story" ? publierStory(file) : publierEclair(file, "");
   }
-  mt = { file, origine, url: URL.createObjectURL(file), debut: 0, fin: 1, duree: 1, vitesse: 1, filtre: "none", texte: "", couleur: "blanc",
-    sticker: "", muet: false, son: null, posTexte: { x: 0.5, y: 0.8 }, posSticker: { x: 0.5, y: 0.45 } };
+  mt = { file, origine, type: photo ? "image" : "video", url: URL.createObjectURL(file), debut: 0, fin: 1, duree: 1, vitesse: 1,
+    filtre: "none", texte: "", couleur: "blanc", sticker: "", muet: false, son: null, posTexte: { x: 0.5, y: 0.8 }, posSticker: { x: 0.5, y: 0.45 } };
   document.querySelectorAll("#mt-feuille .puce").forEach((p) => {
     const d = p.dataset;
     p.classList.toggle("actif", d.filtre === "none" || d.vitesse === "1" || d.couleur === "blanc");
   });
   $("#mt-saisie").value = "";
+  $("#mt-legende").value = "";
   $("#mt-muet").checked = false;
   $("#mt-feuille").hidden = true;
   $("#mt-progres").hidden = true;
-  const v = $("#mt-video");
-  v.ontimeupdate = null;
-  v.src = mt.url;
+  document.querySelectorAll('[data-outil="decouper"], [data-outil="vitesse"], [data-outil="son"], #mt-son-pilule').forEach((el) => { el.hidden = photo; });
+  $("#mt-story").hidden = modeAjout !== "story";
+  $("#mt-suivant").hidden = modeAjout === "story";
+  const v = $("#mt-video"), im = $("#mt-image");
+  v.hidden = photo;
+  im.hidden = !photo;
   v.style.filter = "none";
-  v.muted = true;
-  v.playbackRate = 1;
+  im.style.filter = "none";
   $("#montage").hidden = false;
   ajusterScene();
+  v.ontimeupdate = null;
+  if (photo) {
+    v.pause();
+    v.removeAttribute("src");
+    im.src = mt.url;
+    majTexte(); majSticker(); majSon();
+    if (origine === "texte") ouvrirOutil("texte");
+    return;
+  }
+  im.removeAttribute("src");
+  v.src = mt.url;
+  v.muted = true;
+  v.playbackRate = 1;
   mt.duree = await lireDuree(v);
   mt.fin = mt.duree;
   ["mt-debut", "mt-fin"].forEach((id) => { const r = $("#" + id); r.min = 0; r.max = mt.duree; r.step = 0.1; });
@@ -1281,6 +1306,7 @@ function fermerMontage(garder = false) {
   v.pause();
   v.ontimeupdate = null;
   v.removeAttribute("src");
+  $("#mt-image").removeAttribute("src");
   if (mt) URL.revokeObjectURL(mt.url);
   mt = null;
   $("#mt-feuille").hidden = true;
@@ -1294,7 +1320,7 @@ function ouvrirOutil(nom) {
   $("#mt-feuille").hidden = false;
   if (nom === "texte") $("#mt-saisie").focus();
 }
-$("#mt-outils").addEventListener("click", (e) => { const b = e.target.closest("[data-outil]"); if (b && mt) ouvrirOutil(b.dataset.outil); });
+$("#mt-outils").addEventListener("click", (e) => { const b = e.target.closest("[data-outil]"); if (b && mt) { if (b.dataset.outil === "enregistrer") enregistrerMontage(); else ouvrirOutil(b.dataset.outil); } });
 $("#mt-son-pilule").onclick = () => { if (mt) ouvrirOutil("son"); };
 $("#mt-ok").onclick = () => { $("#mt-feuille").hidden = true; };
 $("#mt-feuille").addEventListener("click", (e) => {
@@ -1302,7 +1328,7 @@ $("#mt-feuille").addEventListener("click", (e) => {
   if (!p || !mt) return;
   p.parentElement.querySelectorAll(".puce").forEach((x) => x.classList.toggle("actif", x === p));
   const d = p.dataset;
-  if (d.filtre !== undefined) { mt.filtre = d.filtre; $("#mt-video").style.filter = d.filtre; }
+  if (d.filtre !== undefined) { mt.filtre = d.filtre; $("#mt-video").style.filter = d.filtre; $("#mt-image").style.filter = d.filtre; }
   if (d.vitesse) { mt.vitesse = Number(d.vitesse); $("#mt-video").playbackRate = mt.vitesse; majDuree(); }
   if (d.couleur) { mt.couleur = d.couleur; majTexte(); }
   if (d.sticker !== undefined) { mt.sticker = d.sticker; majSticker(); }
@@ -1324,30 +1350,30 @@ $("#mt-fichier-son").onchange = (e) => {
 $("#mt-retirer-son").onclick = () => { if (mt) { mt.son = null; majSon(); } };
 $("#mt-muet").onchange = (e) => { if (mt) mt.muet = e.target.checked; };
 $("#mt-annuler").onclick = () => {
-  const retour = !!mt && mt.origine === "camera";
-  fermerMontage(retour);
-  if (retour) ouvrirCamera(faceCamera, faceCamera === "user" ? "cam-selfie" : "cam-arriere");
+  const camera = !!mt && mt.origine === "camera";
+  fermerMontage(true);
+  if (camera) ouvrirCamera(faceCamera, faceCamera === "user" ? "cam-selfie" : "cam-arriere");
+  else ouvrirAjout(modeAjout);
 };
 
 $("#mt-suivant").onclick = async () => {
   const f = await terminerMontage();
   if (!f) return;
-  fichierReel = f;
-  $("#nom-reel").textContent = "Vidéo prête (" + (f.size / 1048576).toFixed(1) + " Mo)";
+  const legende = $("#mt-legende").value;
   fermerMontage();
-  if (pageActuelle !== "feed") aller("feed");
-  $("#f-reel").hidden = false;
-  msg("Ajoute une légende puis publie ton éclair.");
+  publierEclair(f, legende);
 };
 $("#mt-story").onclick = async () => {
   const f = await terminerMontage();
   if (!f) return;
+  const legende = $("#mt-legende").value;
   fermerMontage();
-  publierStory(f);
+  publierStory(f, legende);
 };
 
 async function terminerMontage() {
   if (!modifie()) return mt.file;
+  if (mt.type === "image") return exporterPhoto();
   const m = mt, W = 720, H = 1280;
   $("#mt-video").pause();
   $("#mt-progres").hidden = false;
@@ -1533,3 +1559,141 @@ document.addEventListener("focusin", (e) => {
   const vv = document.querySelector("#viewer video");
   if (vv) vv.pause();
 });
+
+// ---------- Écran « Ajouter » (story ou éclair) ----------
+let modeAjout = "story", cleChat = "";
+
+function ouvrirAjout(mode) {
+  modeAjout = mode;
+  pleinEcran(true);
+  $("#aj-titre").textContent = mode === "story" ? "Ajouter à la story" : "Nouvel éclair";
+  $("#aj-photo").hidden = mode !== "story";
+  $("#aj-texte").hidden = mode !== "story";
+  $("#aj-fichier").accept = mode === "story" ? "image/*,video/*" : "video/*";
+  $("#ajout").hidden = false;
+}
+$("#aj-fermer").onclick = () => { $("#ajout").hidden = true; pleinEcran(false); reprendreReels(); };
+$("#aj-camera").onclick = () => { $("#ajout").hidden = true; ouvrirCamera("environment", "cam-arriere"); };
+$("#aj-galerie").onclick = () => $("#aj-fichier").click();
+$("#aj-photo").onclick = () => $("#aj-photo-fichier").click();
+["aj-fichier", "aj-photo-fichier"].forEach((id) => {
+  $("#" + id).onchange = (e) => {
+    const f = e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    $("#ajout").hidden = true;
+    ouvrirMontage(f, "galerie");
+  };
+});
+$("#aj-texte").onclick = async () => {
+  $("#ajout").hidden = true;
+  const c = document.createElement("canvas");
+  c.width = 720; c.height = 1280;
+  const x = c.getContext("2d");
+  const g = x.createLinearGradient(0, 0, 720, 1280);
+  g.addColorStop(0, "#5B21B6");
+  g.addColorStop(1, "#08080D");
+  x.fillStyle = g;
+  x.fillRect(0, 0, 720, 1280);
+  const blob = await new Promise((ok) => c.toBlob(ok, "image/png"));
+  ouvrirMontage(new File([blob], "fond.png", { type: "image/png" }), "texte");
+};
+
+const legendeStory = (s) => (s.legende ? `<p class="story-legende">${esc(s.legende)}</p>` : "");
+
+async function publierEclair(file, legende) {
+  try {
+    msg("Envoi de l'éclair…");
+    const url = await envoyerImage(file, true);
+    const { error } = await db.from("reels").insert({ user_id: moi.id, video_url: url, legende: legende.trim().slice(0, 150) });
+    if (error) throw error;
+    msg("Éclair publié !");
+    if (pageActuelle === "feed") chargerFeed(); else aller("feed");
+  } catch (err) { msg(err.message); }
+}
+
+async function exporterPhoto() {
+  const m = mt, W = 720, H = 1280;
+  const img = new Image();
+  img.src = m.url;
+  await img.decode();
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const ctx = c.getContext("2d");
+  const r = Math.max(W / img.naturalWidth, H / img.naturalHeight), dw = img.naturalWidth * r, dh = img.naturalHeight * r;
+  ctx.filter = FILTRES_OK ? m.filtre : "none";
+  ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+  ctx.filter = "none";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  if (m.sticker) { ctx.font = "116px sans-serif"; ctx.fillText(m.sticker, m.posSticker.x * W, m.posSticker.y * H); }
+  const texte = m.texte.trim();
+  if (texte) {
+    let taille = 64;
+    const police = () => `800 ${taille}px Inter, "Segoe UI", sans-serif`;
+    ctx.font = police();
+    while (ctx.measureText(texte).width > 640 && taille > 28) { taille -= 4; ctx.font = police(); }
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = "rgba(0,0,0,0.7)";
+    ctx.fillStyle = m.couleur === "violet" ? "#A855F7" : "#FFFFFF";
+    ctx.strokeText(texte, m.posTexte.x * W, m.posTexte.y * H);
+    ctx.fillText(texte, m.posTexte.x * W, m.posTexte.y * H);
+  }
+  const blob = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.9));
+  return new File([blob], "story-" + Date.now() + ".jpg", { type: "image/jpeg" });
+}
+
+async function enregistrerMontage() {
+  const f = await terminerMontage();
+  if (!f) return;
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(f);
+  a.download = f.name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  msg("Enregistré sur ton téléphone");
+}
+
+// ---------- Pastilles (notifications et messages) ----------
+const cleVu = () => "vs_vu_notifs_" + moi.id;
+function badge(el, n) { el.hidden = !n; el.textContent = n > 99 ? "99+" : n; }
+
+async function majBadges() {
+  if (!moi) return;
+  if (!localStorage.getItem(cleVu())) localStorage.setItem(cleVu(), new Date().toISOString());
+  const vu = localStorage.getItem(cleVu());
+  const [f, n, m] = await Promise.all([
+    db.from("follows").select("*", { count: "exact", head: true }).eq("followed_id", moi.id).gt("created_at", vu),
+    db.from("notifications").select("*", { count: "exact", head: true }).eq("user_id", moi.id).gt("created_at", vu),
+    db.from("messages").select("*", { count: "exact", head: true }).eq("receiver_id", moi.id).eq("lu", false),
+  ]);
+  badge($("#badge-notifs"), (f.count || 0) + (n.count || 0));
+  badge($("#badge-messages"), m.count || 0);
+}
+function marquerNotifsVues() { localStorage.setItem(cleVu(), new Date().toISOString()); majBadges(); }
+
+async function marquerLus() {
+  if (!dest) return;
+  await db.from("messages").update({ lu: true }).eq("receiver_id", moi.id).eq("sender_id", dest.id).eq("lu", false);
+  majBadges();
+}
+setInterval(majBadges, 60000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) majBadges(); });
+
+// ---------- Désactiver son compte ----------
+async function reactiverSiBesoin(id) {
+  const r = await db.from("profiles").select("desactive").eq("id", id).single();
+  if (r.data && r.data.desactive) {
+    await db.from("profiles").update({ desactive: false }).eq("id", id);
+    msg("Bon retour ! Ton compte est réactivé.");
+  }
+}
+$("#desactiver").onclick = async () => {
+  if (!confirm("Désactiver ton compte ? Ton profil, tes éclairs et tes stories seront cachés. Il se réactive tout seul quand tu te reconnectes.")) return;
+  const { error } = await db.from("profiles").update({ desactive: true }).eq("id", moi.id);
+  if (error) return msg(error.message);
+  await db.auth.signOut();
+  msg("Compte désactivé. À bientôt !");
+};
