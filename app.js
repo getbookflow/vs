@@ -20,7 +20,7 @@ function msg(t) {
   setTimeout(() => m.classList.remove("on"), 3000);
 }
 
-async function envoyerImage(file, video = false) {
+async function envoyerImage(file, video = false, onProgress = null) {
   if (!file || !file.size) return null;
   const estVideo = file.type.startsWith("video/");
   if (!(file.type.startsWith("image/") || (video && estVideo))) throw new Error(video ? "Photo ou vidéo requise" : "Image requise");
@@ -28,8 +28,24 @@ async function envoyerImage(file, video = false) {
   const sub = file.type.split("/")[1];
   const ext = { jpeg: "jpg", quicktime: "mov" }[sub] || sub;
   const chemin = moi.id + "/" + Date.now() + "-" + Math.random().toString(36).slice(2) + "." + ext;
-  const { error } = await db.storage.from("medias").upload(chemin, file);
-  if (error) throw error;
+  if (onProgress) {
+    const { data: { session } } = await db.auth.getSession();
+    await new Promise((ok, ko) => {
+      const x = new XMLHttpRequest();
+      x.open("POST", SUPABASE_URL + "/storage/v1/object/medias/" + chemin);
+      x.setRequestHeader("Authorization", "Bearer " + (session ? session.access_token : SUPABASE_KEY));
+      x.setRequestHeader("apikey", SUPABASE_KEY);
+      x.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+      x.setRequestHeader("x-upsert", "false");
+      x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded * 100) / e.total)); };
+      x.onload = () => (x.status >= 200 && x.status < 300 ? ok() : ko(new Error("Envoi impossible (" + x.status + ")")));
+      x.onerror = () => ko(new Error("Connexion perdue pendant l'envoi."));
+      x.send(file);
+    });
+  } else {
+    const { error } = await db.storage.from("medias").upload(chemin, file);
+    if (error) throw error;
+  }
   return db.storage.from("medias").getPublicUrl(chemin).data.publicUrl;
 }
 
@@ -1630,13 +1646,14 @@ const legendeStory = (s) => (s.legende ? `<p class="story-legende">${esc(s.legen
 
 async function publierEclair(file, legende) {
   try {
-    msg("Envoi de l'éclair…");
-    const url = await envoyerImage(file, true);
+    afficherProgres(0);
+    const url = await envoyerImage(file, true, afficherProgres);
     const { error } = await db.from("reels").insert({ user_id: moi.id, video_url: url, legende: legende.trim().slice(0, 150) });
     if (error) throw error;
     msg("Éclair publié !");
     if (pageActuelle === "feed") chargerFeed(); else aller("feed");
   } catch (err) { msg(err.message); }
+  finally { afficherProgres(null); }
 }
 
 async function exporterPhoto() {
@@ -1778,5 +1795,71 @@ function pageSuivante() {
     const dx = t.clientX - depart.x, dy = t.clientY - depart.y;
     depart = null;
     if (dy > 100 && Math.abs(dx) < 70) fermerViewer();
+  }, { passive: true });
+})();
+
+// ---------- v16 : pourcentage d'envoi (en haut à gauche) ----------
+(() => {
+  const s = document.createElement("style");
+  s.textContent = `
+    #progres-envoi { position: fixed; z-index: 95; top: calc(12px + env(safe-area-inset-top, 0px)); left: 12px;
+      padding: 8px 16px; border-radius: 999px; font-weight: 800; color: #fff; border: 1px solid var(--neon);
+      box-shadow: var(--lueur); pointer-events: none; }
+    #tirer { position: fixed; z-index: 40; left: 50%; top: calc(var(--haut, 69px) + 8px); transform: translateX(-50%);
+      padding: 8px 18px; border-radius: 999px; font-size: 0.85rem; font-weight: 700; color: #fff;
+      background: var(--noir-2); border: 1px solid var(--neon); box-shadow: var(--lueur); pointer-events: none; }
+    .entete .logo { cursor: pointer; }`;
+  document.head.appendChild(s);
+})();
+
+function afficherProgres(p) {
+  let el = $("#progres-envoi");
+  if (!el) { el = document.createElement("div"); el.id = "progres-envoi"; document.body.appendChild(el); }
+  if (p === null) { el.hidden = true; return; }
+  el.hidden = false;
+  el.textContent = "Envoi " + p + " %";
+  el.style.background = `linear-gradient(90deg, var(--violet-fonce) ${p}%, rgba(8, 8, 13, 0.9) ${p}%)`;
+}
+
+// ---------- v16 : actualiser VS (toucher le logo ou tirer vers le bas) ----------
+function actualiser() {
+  if (!moi || pageActuelle === "autre") return;
+  majBadges();
+  majProfil();
+  if (pageActuelle === "messages" && dest) { cleChat = ""; rafraichirChat(); }
+  else aller(pageActuelle);
+  msg("VS actualisé");
+}
+document.querySelector(".entete .logo").onclick = actualiser;
+
+(() => {
+  const ind = document.createElement("div");
+  ind.id = "tirer";
+  ind.hidden = true;
+  document.body.appendChild(ind);
+  let dep = null, dy = 0, dx = 0;
+  const enHaut = () => (pageActuelle === "feed" ? $("#liste-reels").scrollTop <= 0 : window.scrollY <= 0);
+  document.addEventListener("touchstart", (e) => {
+    if (!moi || e.touches.length !== 1 || surcoucheOuverte() || !enHaut()
+      || e.target.closest("input, textarea, select, .stories, .mt-puces, video[controls], #fil-chat, #liste-comm, #menu-actions")) { dep = null; return; }
+    dep = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    dy = 0; dx = 0;
+  }, { passive: true });
+  document.addEventListener("touchmove", (e) => {
+    if (!dep) return;
+    dy = e.touches[0].clientY - dep.y;
+    dx = e.touches[0].clientX - dep.x;
+    if (dy > 20 && dy > Math.abs(dx)) {
+      ind.hidden = false;
+      ind.textContent = dy > 90 ? "Relâche pour actualiser" : "↓ Tire pour actualiser";
+    } else ind.hidden = true;
+  }, { passive: true });
+  document.addEventListener("touchend", () => {
+    if (dep && dy > 90 && Math.abs(dx) < 60) {
+      ind.textContent = "Actualisation…";
+      actualiser();
+      setTimeout(() => { ind.hidden = true; }, 700);
+    } else ind.hidden = true;
+    dep = null;
   }, { passive: true });
 })();
