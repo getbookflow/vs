@@ -1863,3 +1863,56 @@ document.querySelector(".entete .logo").onclick = actualiser;
     dep = null;
   }, { passive: true });
 })();
+
+// ---------- v17 : champs « fichier » professionnels (dans tout VS) ----------
+(() => {
+  const s = document.createElement("style");
+  s.textContent = `
+    .fichier { position: relative; display: flex; align-items: center; gap: 14px; margin: 6px 0; padding: 14px 16px;
+      border-radius: 14px; border: 1.5px dashed var(--contour); background: var(--noir); cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease; }
+    .fichier:active { background: var(--noir-2); }
+    .fichier.choisi { border-style: solid; border-color: var(--neon); box-shadow: var(--lueur); }
+    .fichier > span { pointer-events: none; }
+    .fichier input[type="file"] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0;
+      opacity: 0; cursor: pointer; border: none; }
+    .fichier-icone { flex: none; width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center;
+      overflow: hidden; background: linear-gradient(135deg, var(--neon), var(--violet-fonce)); }
+    .fichier-icone svg { width: 22px; height: 22px; stroke: #fff; fill: none; }
+    .fichier-icone img { width: 100%; height: 100%; object-fit: cover; }
+    .fichier-texte { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .fichier-texte strong { color: var(--blanc); font-size: 0.95rem; }
+    .fichier-texte small { color: var(--gris); font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fichier.choisi .fichier-texte small { color: var(--neon); }`;
+  document.head.appendChild(s);
+
+  const IC_ENVOI = '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16"/></svg>';
+  const IC_OK = '<svg viewBox="0 0 24 24" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>';
+
+  function ameliorerFichier(input) {
+    if (input.hidden || input.dataset.pro) return;
+    input.dataset.pro = "1";
+    const acc = input.accept || "";
+    const img = acc.includes("image"), vid = acc.includes("video");
+    const titre = img && vid ? "Choisir une photo ou une vidéo" : vid ? "Choisir une vidéo" : img ? "Choisir une photo" : "Choisir un fichier";
+    const boite = document.createElement("div");
+    boite.className = "fichier";
+    input.parentNode.insertBefore(boite, input);
+    boite.innerHTML = `<span class="fichier-icone">${IC_ENVOI}</span><span class="fichier-texte"><strong>${titre}</strong><small>Touche pour parcourir</small></span>`;
+    boite.appendChild(input);
+    let url = null;
+    const maj = () => {
+      const f = input.files && input.files[0];
+      if (url) { URL.revokeObjectURL(url); url = null; }
+      boite.classList.toggle("choisi", !!f);
+      const ic = boite.querySelector(".fichier-icone"), sm = boite.querySelector("small");
+      if (!f) { ic.innerHTML = IC_ENVOI; sm.textContent = "Touche pour parcourir"; return; }
+      if (f.type.startsWith("image/")) { url = URL.createObjectURL(f); ic.innerHTML = `<img src="${url}" alt="">`; }
+      else ic.innerHTML = IC_OK;
+      sm.textContent = f.name + " · " + (f.size / 1048576).toFixed(1) + " Mo";
+    };
+    input.addEventListener("change", maj);
+    if (input.form) input.form.addEventListener("reset", () => setTimeout(maj, 0));
+  }
+  document.querySelectorAll('input[type="file"]').forEach(ameliorerFichier);
+})();
