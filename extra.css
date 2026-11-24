@@ -357,3 +357,14 @@ input[type="range"] { padding: 0; border: none; background: none; accent-color: 
 }
 .nav button { position: relative; }
 .nav .badge { top: 0; right: 10px; }
+
+/* ===== v15 : crayon sur la photo de profil ===== */
+.avatar-edit { position: relative; width: fit-content; margin: 0 auto; }
+.avatar-edit .avatar { margin: 0; }
+.crayon {
+  position: absolute; right: -4px; bottom: -4px; width: 36px; height: 36px; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer;
+  background: linear-gradient(135deg, var(--neon), var(--violet-fonce));
+  border: 3px solid var(--noir-2); box-shadow: var(--lueur);
+}
+.crayon svg { width: 16px; height: 16px; stroke: var(--blanc); }
