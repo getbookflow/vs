@@ -1,7 +1,7 @@
 /* VS — partie 4 (app4.js) : à charger APRÈS app3.js */
 
 // ---------- Réglage : clé publique des notifications (voir supabase-setup.sql) ----------
-const VS_VAPID = "BEQuMmBt9zJOv4cJRPZ4aHXKE1B5DZEpEh_zK5wD_I2SVb08xrbcXrZHIaV7MzVvc9zlxQLPYijMgBLQLxKOlKI";
+const VS_VAPID = "COLLE_ICI_TA_CLE_VAPID_PUBLIQUE";
 const VS_MAX_COMPTES = 8;
 
 // Évite le flash de la page « mot de passe » au démarrage
@@ -133,11 +133,12 @@ const themeChat = () => (dest ? localStorage.getItem("vs_chat_th_" + dest.id) ||
   ta.addEventListener("input", () => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 130) + "px"; });
   new MutationObserver(() => { ta.placeholder = ancien.placeholder; }).observe(ancien, { attributes: true, attributeFilter: ["placeholder"] });
 
-  const barre = document.createElement("div");
-  barre.id = "chat-themes";
-  barre.className = "mt-puces";
-  barre.innerHTML = THEMES_CHAT.map(([k, n]) => `<button type="button" class="puce" data-chat-th="${k}">${n}</button>`).join("");
-  $("#f-chat").before(barre);
+  // Bouton « trois points » en haut de la discussion : menu des thèmes
+  const st = document.createElement("style");
+  st.textContent = "#chat-menu svg { fill: var(--blanc); stroke: none; }";
+  document.head.appendChild(st);
+  $("#chat-video").parentNode.insertAdjacentHTML("beforeend",
+    '<button type="button" class="outil-chat" id="chat-menu" aria-label="Options de la discussion"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>');
 })();
 
 function majThemesChat() {
@@ -146,10 +147,18 @@ function majThemesChat() {
   $("#chat").dataset.th = th;
 }
 document.addEventListener("click", (e) => {
+  if (e.target.closest("#chat-menu") && dest) {
+    const th = themeChat();
+    $("#menu-actions").innerHTML = '<p class="secondaire">Thème de la discussion</p>'
+      + THEMES_CHAT.map(([k, n]) => `<button type="button" class="bouton ${k === th ? "" : "contour"} large" data-chat-th="${k}">${n}</button>`).join("");
+    $("#menu").hidden = false;
+    return;
+  }
   const b = e.target.closest("[data-chat-th]");
   if (!b || !dest) return;
   localStorage.setItem("vs_chat_th_" + dest.id, b.dataset.chatTh);
   majThemesChat();
+  $("#menu").hidden = true;
 });
 
 {
