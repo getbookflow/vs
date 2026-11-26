@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08080D">
+  <link rel="manifest" href="manifest.json?v=28">
+  <link rel="icon" type="image/png" href="icon-192.png?v=28">
+  <link rel="apple-touch-icon" href="icon-192.png?v=28">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="VS">
+  <title>VS</title>
+  <script>try{var t=localStorage.getItem("vs_theme");if(t==="clair"||(t==="auto"&&matchMedia("(prefers-color-scheme: light)").matches))document.documentElement.dataset.theme="light"}catch(e){}</script>
+  <script>
+    /* Affiche les erreurs directement à l'écran (pour savoir ce qui bloque VS) */
+    window.addEventListener("error", function (e) {
+      var t = e.target;
+      var texte = (t && t !== window && (t.src || t.href))
+        ? "Fichier introuvable : " + (t.src || t.href).split("/").pop()
+        : "Erreur : " + e.message + "\nFichier : " + String(e.filename || "?").split("/").pop() + ", ligne " + e.lineno;
+      var b = document.getElementById("erreur-vs");
+      if (!b) {
+        b = document.createElement("pre");
+        b.id = "erreur-vs";
+        b.style.cssText = "position:fixed;left:10px;right:10px;bottom:10px;z-index:9999;white-space:pre-wrap;padding:14px;border-radius:12px;background:#11111A;border:1px solid #A855F7;color:#fff;font-size:13px";
+        (document.body || document.documentElement).appendChild(b);
+      }
+      b.textContent += texte + "\n\n";
+    }, true);
+  </script>
+  <link rel="stylesheet" href="style.css?v=28">
+  <link rel="stylesheet" href="extra.css?v=28">
+</head>
+<body>
+
+<!-- CONNEXION / INSCRIPTION -->
+<section id="auth" hidden>
+  <div class="auth-boite carte">
+    <span class="logo">VS</span>
+    <p class="slogan">Montre-toi. Défie. Gagne.</p>
+
+    <form id="f-login">
+      <input name="email" type="email" placeholder="Adresse e-mail" required>
+      <input name="password" type="password" placeholder="Mot de passe" required>
+      <button class="bouton large" style="margin-top:10px">Se connecter</button>
+      <button type="button" class="lien" id="oubli">Mot de passe oublié</button><br>
+      <button type="button" class="lien" id="vers-inscription">Créer un compte</button>
+    </form>
+
+    <form id="f-signup" hidden>
+      <input name="pseudo" placeholder="Pseudo (lettres, chiffres, _)" pattern="[A-Za-z0-9_]{3,20}" required>
+      <input name="prenom" placeholder="Prénom" required>
+      <label for="naissance">Date de naissance (18 ans minimum)</label>
+      <input id="naissance" name="naissance" type="date" required>
+      <input name="email" type="email" placeholder="Adresse e-mail" required>
+      <input name="password" type="password" placeholder="Mot de passe (8 caractères min.)" minlength="8" required>
+      <button class="bouton large" style="margin-top:10px">Créer mon compte</button>
+      <button type="button" class="lien" id="vers-connexion">J'ai déjà un compte</button>
+    </form>
+  </div>
+</section>
+
+<!-- APPLICATION -->
+<div id="app" hidden>
+  <header class="entete">
+    <span class="logo">VS</span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="cloche" id="btn-creer" aria-label="Publier un éclair">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button class="cloche" id="loupe" aria-label="Rechercher">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      </button>
+      <div class="points">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span id="solde">0</span><span class="mot">&nbsp;abonnés</span>
+      </div>
+      <button class="cloche" id="cloche" aria-label="Notifications">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="badge" id="badge-notifs" hidden></span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="page active" id="feed">
+      <div class="stories" id="stories"></div>
+      <form id="f-reel" class="carte" style="margin-top:12px" hidden>
+        <input name="legende" maxlength="150" placeholder="Légende (facultatif)">
+        <p class="secondaire" id="nom-reel">Aucune vidéo choisie (30 Mo max)</p>
+        <input type="file" id="cam-arriere" accept="video/*" capture="environment" hidden>
+        <input type="file" id="cam-selfie" accept="video/*" capture="user" hidden>
+        <input type="file" id="galerie" accept="video/*" hidden>
+        <button class="bouton large" style="margin-top:10px">Publier l'éclair</button>
+        <button type="button" class="lien" id="annuler-reel">Annuler</button>
+      </form>
+      <div id="liste-reels"></div>
+    </section>
+
+    <section class="page" id="recherche">
+      <h1>Rechercher</h1>
+      <input id="champ-recherche" placeholder="Chercher un compte…" maxlength="20" autocomplete="off">
+      <div class="carte" id="resultats-recherche" style="margin-top:12px"><p class="secondaire">Écris un pseudo pour chercher un compte.</p></div>
+    </section>
+
+    <section class="page" id="autre">
+      <button type="button" class="lien" data-retour>← Retour</button>
+      <div id="fiche-autre"></div>
+    </section>
+
+    <section class="page" id="parametres">
+      <button type="button" class="lien" data-retour>← Retour</button>
+      <h1>Paramètres</h1>
+      <div class="carte" style="margin-top:12px"><h2 style="margin-top:0">Statistiques</h2><div id="stats-compte"></div></div>
+      <div class="carte"><h2 style="margin-top:0">Informations du compte</h2><div id="infos-compte"></div></div>
+      <form id="f-mdp" class="carte">
+        <h2 style="margin-top:0">Changer le mot de passe</h2>
+        <input name="ancien" type="password" autocomplete="current-password" placeholder="Ancien mot de passe" required>
+        <input name="mdp" type="password" minlength="8" autocomplete="new-password" placeholder="Nouveau mot de passe (8 caractères min.)" required>
+        <input name="mdp2" type="password" minlength="8" placeholder="Répète le mot de passe" required>
+        <button class="bouton large" style="margin-top:10px">Modifier</button>
+      </form>
+      <div class="carte">
+        <h2 style="margin-top:0">Notifications</h2>
+        <label><input type="checkbox" id="opt-son"> Son des notifications</label>
+        <label><input type="checkbox" id="opt-vibre"> Vibration</label>
+        <button type="button" class="bouton contour" id="test-son" style="margin-top:10px">Écouter le son</button>
+      </div>
+      <div class="carte">
+        <h2 style="margin-top:0">Données mobiles</h2>
+        <label><input type="checkbox" id="opt-eco"> Économiseur de données</label>
+        <p class="secondaire">Les vidéos ne se préchargent plus et ne se lancent plus toutes seules : touche-les pour les lire.</p>
+      </div>
+      <div class="carte"><h2 style="margin-top:0">Comptes en sourdine</h2><div id="liste-sourdine"></div></div>
+      <div class="carte"><h2 style="margin-top:0">Comptes bloqués</h2><div id="liste-bloques"></div></div>
+      <button class="bouton contour large" id="desactiver" style="margin-bottom:10px">Désactiver mon compte</button>
+      <button class="bouton contour large" id="deconnexion" style="margin-bottom:14px">Se déconnecter</button>
+    </section>
+
+    <section class="page" id="notifs">
+      <h1>Notifications</h1>
+      <div class="carte" id="liste-notifs" style="margin-top:16px"></div>
+    </section>
+
+    <section class="page" id="duels">
+      <form id="f-duel" class="carte">
+        <h2 style="margin-top:0">Créer un duel</h2>
+        <input name="titre" placeholder="Titre du duel" minlength="3" maxlength="80" required>
+        <select name="categorie" required>
+          <option>Mode</option><option>Beauté</option><option>Humour</option><option>Sport</option>
+          <option>Musique</option><option>Gaming</option><option>Créativité</option><option>Lifestyle</option>
+        </select>
+        <label>Contenu A (photo ou vidéo, 30 Mo max)</label><input name="a" type="file" accept="image/*,video/*" required>
+        <label>Contenu B (même type que A)</label><input name="b" type="file" accept="image/*,video/*" required>
+        <button class="bouton large" style="margin-top:10px">Lancer le duel (24 h)</button>
+      </form>
+      <div id="liste-duels"></div>
+    </section>
+
+    <section class="page" id="classement">
+      <h1>Classement</h1>
+      <p class="secondaire">Les 100 premiers selon leurs abonnés.</p>
+      <div class="carte" id="liste-classement" style="margin-top:16px"></div>
+    </section>
+
+    <section class="page" id="messages">
+      <div id="conversations">
+        <h1>Messages</h1>
+        <form id="f-recherche" class="carte" style="margin-top:12px">
+          <input name="q" placeholder="Chercher un pseudo" maxlength="20">
+          <button class="bouton large">Chercher</button>
+          <div id="resultats"></div>
+        </form>
+        <div class="carte" id="liste-conv"></div>
+      </div>
+      <div id="chat" hidden>
+        <button type="button" class="lien" id="retour">← Retour</button>
+        <h2 id="chat-titre"></h2>
+        <div class="carte" id="fil-chat"></div>
+        <form id="f-chat" class="deux">
+          <input name="texte" placeholder="Ton message" maxlength="1000" autocomplete="off" required>
+          <button class="bouton">Envoyer</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="page" id="profil">
+      <div class="profil-haut">
+        <h2>Mon profil</h2>
+        <button type="button" class="cloche" id="btn-param" aria-label="Paramètres">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
+      </div>
+      <div class="carte profil" id="fiche"></div>
+      <form id="f-profil" class="carte">
+        <h2 style="margin-top:0">Modifier mon profil</h2>
+        <input name="prenom" placeholder="Prénom" required>
+        <textarea name="bio" rows="2" maxlength="200" placeholder="Ta description"></textarea>
+        <label>Photo de profil</label><input name="avatar" type="file" accept="image/*">
+        <button class="bouton large" style="margin-top:10px">Enregistrer</button>
+        <button type="button" class="lien" id="annuler-profil">Annuler</button>
+      </form>
+      <div class="carte"><h2 style="margin-top:0">Éclairs enregistrés</h2><div id="liste-enregistres"></div></div>
+    </section>
+  </main>
+
+  <nav class="nav">
+    <button class="actif" data-page="feed">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Accueil
+    </button>
+    <button data-page="duels">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m14.5 17.5 6-6M3 3l9 9M9.5 6.5 3 13M20 4l-9 9"/><path d="m5 19 3-3M16 16l3 3"/></svg>Duels
+    </button>
+    <button data-page="classement">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20V10M12 20V4M18 20v-6"/></svg>Classement
+    </button>
+    <button data-page="messages">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Messages
+      <span class="badge" id="badge-messages" hidden></span>
+    </button>
+    <button data-page="profil">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Profil
+    </button>
+  </nav>
+</div>
+
+<div id="lightbox" hidden><img alt=""></div>
+<div id="commentaires" hidden>
+  <div class="comm-tete"><strong>Commentaires</strong><button type="button" class="lien" id="fermer-comm">Fermer</button></div>
+  <div id="liste-comm"></div>
+  <form id="f-comm" class="deux">
+    <input name="texte" placeholder="Ajoute un commentaire" maxlength="300" autocomplete="off" required>
+    <button class="bouton">Envoyer</button>
+  </form>
+</div>
+<div id="menu" hidden>
+  <div id="menu-actions"></div>
+  <button type="button" class="bouton contour large" id="annuler-menu">Annuler</button>
+</div>
+<input type="file" id="story-input" accept="image/*,video/*" hidden>
+<div id="viewer" hidden></div>
+<div id="ajout" hidden>
+  <div class="aj-haut">
+    <button type="button" class="cam-rond" id="aj-fermer" aria-label="Fermer">✕</button>
+    <h2 id="aj-titre">Ajouter à la story</h2>
+    <span class="mt-vide"></span>
+  </div>
+  <div class="aj-tuiles">
+    <button type="button" id="aj-camera"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><span>Caméra</span></button>
+    <button type="button" id="aj-photo"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg><span>Photo</span></button>
+    <button type="button" id="aj-galerie"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>Galerie</span></button>
+    <button type="button" id="aj-texte"><b>Aa</b><span>Texte</span></button>
+  </div>
+  <p class="secondaire aj-note">« Galerie » ouvre ta galerie : tes photos et vidéos récentes sont tout en haut.</p>
+  <input type="file" id="aj-fichier" accept="image/*,video/*" hidden>
+  <input type="file" id="aj-photo-fichier" accept="image/*" capture="environment" hidden>
+</div>
+<div id="montage" hidden>
+  <div id="mt-haut">
+    <button type="button" class="cam-rond" id="mt-annuler" aria-label="Retour"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+    <button type="button" id="mt-son-pilule"><svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span id="mt-son-nom">Ajouter un son</span></button>
+    <span class="mt-vide"></span>
+  </div>
+  <div id="mt-zone">
+    <div class="mt-scene" id="mt-scene">
+      <video id="mt-video" playsinline loop></video>
+      <img id="mt-image" alt="" hidden>
+      <div id="mt-texte" class="mt-mobile"></div>
+      <div id="mt-sticker" class="mt-mobile"></div>
+      <div id="mt-outils">
+        <button type="button" data-outil="decouper"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg></span><small>Découper</small></button>
+        <button type="button" data-outil="texte"><span class="aa">Aa</span><small>Texte</small></button>
+        <button type="button" data-outil="sticker"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg></span><small>Autocollant</small></button>
+        <button type="button" data-outil="filtres"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="6"/><circle cx="15" cy="9" r="6"/><circle cx="12" cy="15" r="6"/></svg></span><small>Filtres</small></button>
+        <button type="button" data-outil="vitesse"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 14l4-4"/><path d="M3.3 17a10 10 0 1 1 17.4 0"/></svg></span><small>Vitesse</small></button>
+        <button type="button" data-outil="enregistrer"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 21h16"/></svg></span><small>Enregistrer</small></button>
+        <button type="button" data-outil="son"><span><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><small>Son</small></button>
+      </div>
+    </div>
+  </div>
+  <div id="mt-feuille" hidden>
+    <div class="mt-panneau" data-panneau="decouper" hidden>
+      <label>Début <span id="mt-lab-debut">0.0 s</span></label>
+      <input type="range" id="mt-debut" min="0" max="1" step="0.1" value="0">
+      <label>Fin <span id="mt-lab-fin">0.0 s</span></label>
+      <input type="range" id="mt-fin" min="0" max="1" step="0.1" value="1">
+      <p class="secondaire" id="mt-duree"></p>
+    </div>
+    <div class="mt-panneau" data-panneau="texte" hidden>
+      <input id="mt-saisie" maxlength="40" placeholder="Écris ton texte…" autocomplete="off">
+      <div class="mt-puces">
+        <button type="button" class="puce actif" data-couleur="blanc">Blanc</button>
+        <button type="button" class="puce" data-couleur="violet">Violet</button>
+      </div>
+      <p class="secondaire">Glisse le texte avec ton doigt pour le placer.</p>
+    </div>
+    <div class="mt-panneau" data-panneau="sticker" hidden>
+      <div class="mt-puces" id="mt-stickers"></div>
+      <p class="secondaire">Glisse l'autocollant avec ton doigt pour le placer.</p>
+    </div>
+    <div class="mt-panneau" data-panneau="filtres" hidden><div class="mt-puces" id="mt-filtres"></div></div>
+    <div class="mt-panneau" data-panneau="vitesse" hidden><div class="mt-puces" id="mt-vitesse"></div></div>
+    <div class="mt-panneau" data-panneau="son" hidden>
+      <button type="button" class="bouton contour large" id="mt-choisir-son">Choisir un son sur le téléphone</button>
+      <button type="button" class="bouton contour large" id="mt-retirer-son" style="margin-top:8px">Retirer le son ajouté</button>
+      <label style="margin-top:12px"><input type="checkbox" id="mt-muet"> Couper le son d'origine</label>
+      <p class="secondaire">Utilise uniquement des sons dont tu as les droits.</p>
+    </div>
+    <button type="button" class="bouton large" id="mt-ok" style="margin-top:10px">OK</button>
+  </div>
+  <input id="mt-legende" placeholder="Ajouter une légende…" maxlength="150" autocomplete="off">
+  <div id="mt-bas">
+    <button type="button" class="bouton contour large" id="mt-story">Ta story</button>
+    <button type="button" class="bouton large" id="mt-suivant">Publier l'éclair</button>
+  </div>
+  <input type="file" id="mt-fichier-son" accept="audio/*" hidden>
+  <div id="mt-progres" hidden>
+    <div class="mt-barre"><i id="mt-barre-i"></i></div>
+    <p id="mt-progres-txt">Préparation…</p>
+  </div>
+</div>
+<div id="camera" hidden>
+  <video id="cam-direct" playsinline muted autoplay></video>
+  <video id="cam-revoir" playsinline controls loop hidden></video>
+  <button type="button" class="cam-rond" id="cam-fermer" aria-label="Fermer">✕</button>
+  <span id="cam-chrono">0:00</span>
+  <input type="range" id="cam-zoom" min="1" max="3" step="0.1" value="1" hidden>
+  <div id="cam-outils">
+    <button type="button" class="cam-outil" id="cam-flip"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg><small>Retourner</small></button>
+    <button type="button" class="cam-outil" id="cam-flash"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg><small>Flash</small></button>
+    <button type="button" class="cam-outil" id="cam-minuterie"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg><small id="cam-min-txt">Minuterie</small></button>
+  </div>
+  <div id="cam-durees">
+    <button type="button" class="puce" data-duree="15">15 s</button>
+    <button type="button" class="puce" data-duree="30">30 s</button>
+    <button type="button" class="puce actif" data-duree="60">60 s</button>
+  </div>
+  <div id="cam-compte" hidden></div>
+  <div id="cam-pilote">
+    <button type="button" id="cam-rec" aria-label="Filmer"></button>
+  </div>
+  <div id="cam-choix" hidden>
+    <button type="button" class="bouton contour large" id="cam-refaire">Refaire</button>
+    <button type="button" class="bouton large" id="cam-utiliser">Utiliser</button>
+  </div>
+</div>
+<div id="lecteur" hidden>
+  <button type="button" class="lien" id="fermer-lecteur">✕ Fermer</button>
+  <video controls playsinline></video>
+  <p></p>
+</div>
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js?v=28"></script>
+<script src="app.js?v=28"></script>
+<script src="app2.js?v=28"></script>
+<script src="app3.js?v=28"></script>
+<script>
+  /* Installation de VS comme vraie application (PWA) */
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () {});
+    });
+  }
+</script>
+</body>
+</html>
