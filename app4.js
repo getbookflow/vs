@@ -1,0 +1,627 @@
+/* VS — partie 4 (app4.js) : à charger APRÈS app3.js */
+
+// ---------- Réglage : clé publique des notifications (voir supabase-setup.sql) ----------
+const VS_VAPID = "COLLE_ICI_TA_CLE_VAPID_PUBLIQUE";
+const VS_MAX_COMPTES = 8;
+
+// Évite le flash de la page « mot de passe » au démarrage
+ecran("attente");
+setTimeout(() => { if ($("#auth").hidden && $("#app").hidden) ecran("auth"); }, 5000);
+
+function envelopper(nom, apres, cle) {
+  const ancien = window[nom];
+  window[nom] = async function (...a) {
+    const r = await ancien.apply(this, a);
+    try { await apres(...a); } catch (e) {}
+    return r;
+  };
+  if (cle) chargeurs[cle] = window[nom];
+}
+
+// ---------- 1. Couleurs de VS ----------
+const COULEURS = {
+  violet: ["Violet", "#A855F7", "#8B5CF6", "#5B21B6"],
+  rose: ["Rose", "#FF4DA6", "#F472B6", "#BE185D"],
+  vert: ["Vert", "#22E58A", "#34D399", "#047857"],
+  bleu: ["Bleu", "#38BDF8", "#60A5FA", "#1D4ED8"],
+  rouge: ["Rouge", "#FF4D5E", "#F87171", "#B91C1C"],
+  orange: ["Orange", "#FF9F43", "#FB923C", "#C2410C"],
+  turquoise: ["Turquoise", "#2DD4BF", "#5EEAD4", "#0F766E"],
+};
+function rgbaHex(h, a) {
+  const n = parseInt(h.slice(1), 16);
+  return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
+function appliquerCouleur(nom) {
+  const c = COULEURS[nom] || COULEURS.violet;
+  const r = document.documentElement.style;
+  r.setProperty("--neon", c[1]);
+  r.setProperty("--violet", c[2]);
+  r.setProperty("--violet-fonce", c[3]);
+  r.setProperty("--lueur", "0 0 18px " + rgbaHex(c[1], 0.45));
+  r.setProperty("--contour", rgbaHex(c[1], 0.28));
+}
+appliquerCouleur(localStorage.getItem("vs_couleur") || "violet");
+
+// ---------- 2. Styles ajoutés ----------
+(() => {
+  const s = document.createElement("style");
+  s.textContent = `
+    #toast { z-index: 130; }
+    .entete .points { display: none !important; }
+    #fiche .stat strong, #fiche-autre .stat strong { font-size: 1rem !important; }
+    #fiche .stat span, #fiche-autre .stat span { font-size: 0.68rem !important; }
+
+    /* en ligne */
+    .pt-ligne { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle;
+      background: #2bff88; box-shadow: 0 0 8px #2bff88; }
+    .statut { display: block; margin-top: -6px; font-size: 0.72rem; font-weight: 600; color: #2bff88; }
+    .note.en-ligne-av::after { content: ""; position: absolute; right: 10px; bottom: 24px; width: 13px; height: 13px; border-radius: 50%;
+      background: #2bff88; border: 2px solid var(--noir); box-shadow: 0 0 8px #2bff88; }
+
+    /* messages en grand écran */
+    #chat:not([hidden]) { position: fixed; inset: 0; z-index: 55; display: flex; flex-direction: column; background: var(--noir);
+      padding: calc(10px + env(safe-area-inset-top, 0px)) 12px calc(10px + env(safe-area-inset-bottom, 0px)); }
+    #chat #fil-chat { flex: 1; height: auto; min-height: 0; margin: 0 0 8px; }
+    #chat .bulle { max-width: 86%; white-space: pre-wrap; }
+    #chat .bulle.vocal { white-space: normal; }
+    #f-chat { flex: none; align-items: flex-end !important; margin-top: 8px; }
+    #f-chat textarea { margin: 0; resize: none; min-height: 46px; max-height: 130px; flex: 1; border-radius: 22px; line-height: 1.3; }
+    #chat-themes { flex: none; padding: 2px 0; }
+    #chat-themes .puce { white-space: nowrap; }
+    .bulle[data-th] { position: relative; border-color: transparent !important; }
+    .bulle[data-th]::after { position: absolute; top: -10px; right: -4px; font-size: 0.95rem; }
+    .bulle.th-amour { background: linear-gradient(135deg, #ff5e8a, #b4005a) !important; }
+    .bulle.th-amitie { background: linear-gradient(135deg, #34d399, #0f766e) !important; }
+    .bulle.th-flirt { background: linear-gradient(135deg, #ff7ab8, #ff9a3c) !important; }
+    .bulle.th-fete { background: linear-gradient(135deg, #f59e0b, #ec4899, #8b5cf6) !important; }
+    .bulle.th-calme { background: linear-gradient(135deg, #60a5fa, #1e3a8a) !important; }
+    .bulle.th-feu { background: linear-gradient(135deg, #ff7a18, #c1121f) !important; }
+    .bulle[data-th="amour"]::after { content: "💕"; }
+    .bulle[data-th="amitie"]::after { content: "🤝"; }
+    .bulle[data-th="flirt"]::after { content: "😘"; }
+    .bulle[data-th="fete"]::after { content: "🎉"; }
+    .bulle[data-th="calme"]::after { content: "🌙"; }
+    .bulle[data-th="feu"]::after { content: "🔥"; }
+    #chat[data-th="amour"] { background: radial-gradient(600px 420px at 50% 0, rgba(255, 94, 138, 0.25), transparent 70%), var(--noir); }
+    #chat[data-th="amitie"] { background: radial-gradient(600px 420px at 50% 0, rgba(52, 211, 153, 0.22), transparent 70%), var(--noir); }
+    #chat[data-th="flirt"] { background: radial-gradient(600px 420px at 50% 0, rgba(255, 154, 60, 0.22), transparent 70%), var(--noir); }
+    #chat[data-th="fete"] { background: radial-gradient(600px 420px at 50% 0, rgba(236, 72, 153, 0.22), transparent 70%), var(--noir); }
+    #chat[data-th="calme"] { background: radial-gradient(600px 420px at 50% 0, rgba(96, 165, 250, 0.22), transparent 70%), var(--noir); }
+    #chat[data-th="feu"] { background: radial-gradient(600px 420px at 50% 0, rgba(255, 122, 24, 0.25), transparent 70%), var(--noir); }
+    .bulle.appel-manque { border-color: #ff4d5e; color: #ff8a94; }
+
+    /* bouton enregistrer sur les éclairs */
+    .reel-actions .sauve.actif svg { stroke: var(--neon); fill: var(--neon); filter: drop-shadow(0 0 6px var(--neon)); }
+
+    /* couleurs */
+    .pastilles-couleur { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+    .pastille { width: 44px; height: 44px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; padding: 0; }
+    .pastille.actif { border-color: #fff; box-shadow: 0 0 14px rgba(255, 255, 255, 0.5); }
+
+    /* duel à deux */
+    .invite-duo { padding: 12px 0; border-bottom: 1px solid var(--contour); }
+    .invite-duo:last-child { border-bottom: none; }
+    .invite-duo .media { max-height: 220px; }`;
+  document.head.appendChild(s);
+})();
+
+// ---------- 3. Messages : grand écran, texte long, thèmes ----------
+const THEMES_CHAT = [["aucun", "Normal"], ["amour", "💕 Amour"], ["amitie", "🤝 Amitié"], ["flirt", "😘 Flirt"], ["fete", "🎉 Fête"], ["calme", "🌙 Calme"], ["feu", "🔥 Feu"]];
+const themeChat = () => (dest ? localStorage.getItem("vs_chat_th_" + dest.id) || "aucun" : "aucun");
+
+(() => {
+  const ancien = $("#f-chat input[name=texte]");
+  ancien.required = false;
+  ancien.style.display = "none";
+  const ta = document.createElement("textarea");
+  ta.id = "chat-texte";
+  ta.rows = 1;
+  ta.maxLength = 900;
+  ta.autocomplete = "off";
+  ta.placeholder = ancien.placeholder || "Ton message";
+  ancien.after(ta);
+  ta.addEventListener("input", () => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 130) + "px"; });
+  new MutationObserver(() => { ta.placeholder = ancien.placeholder; }).observe(ancien, { attributes: true, attributeFilter: ["placeholder"] });
+
+  const barre = document.createElement("div");
+  barre.id = "chat-themes";
+  barre.className = "mt-puces";
+  barre.innerHTML = THEMES_CHAT.map(([k, n]) => `<button type="button" class="puce" data-chat-th="${k}">${n}</button>`).join("");
+  $("#f-chat").before(barre);
+})();
+
+function majThemesChat() {
+  const th = themeChat();
+  document.querySelectorAll("[data-chat-th]").forEach((b) => b.classList.toggle("actif", b.dataset.chatTh === th));
+  $("#chat").dataset.th = th;
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-chat-th]");
+  if (!b || !dest) return;
+  localStorage.setItem("vs_chat_th_" + dest.id, b.dataset.chatTh);
+  majThemesChat();
+});
+
+{
+  const ancienOuvrir = window.ouvrirChat;
+  window.ouvrirChat = function (id, pseudo) {
+    ancienOuvrir(id, pseudo);
+    majThemesChat();
+    $("#chat-texte").value = "";
+    $("#chat-texte").style.height = "auto";
+  };
+}
+
+$("#f-chat").onsubmit = async (e) => {
+  e.preventDefault();
+  const ta = $("#chat-texte");
+  const t = ta.value.trim();
+  if (!t || !dest) return;
+  const th = themeChat();
+  const { error } = await db.rpc("envoyer_message", { p_dest: dest.id, p_texte: (th !== "aucun" ? "[[th:" + th + "]]" : "") + t });
+  if (error) return msg(error.message);
+  ta.value = "";
+  ta.style.height = "auto";
+  cleChat = "";
+  rafraichirChat();
+};
+
+{
+  const ancienBulle = window.bulle;
+  window.bulle = function (m) {
+    let c = m.contenu || "", th = "";
+    const mt = /^\[\[th:(\w+)\]\]\s?([\s\S]*)$/.exec(c);
+    if (mt) { th = mt[1]; c = mt[2]; }
+    const moiMsg = m.sender_id === moi.id ? "moi" : "";
+    const ma = /^\[\[appel:manque\|(audio|video)\]\]$/.exec(c);
+    if (ma) {
+      const v = ma[1] === "video" ? "vidéo" : "audio";
+      return `<div class="bulle appel-manque ${moiMsg}">📞 ${moiMsg ? "Appel " + v + " sans réponse" : "Appel " + v + " manqué"}</div>`;
+    }
+    const mi = /^\[\[invite:([^\]]+)\]\]\s*([\s\S]*)$/.exec(c);
+    if (mi) return `<div class="bulle ${moiMsg}" data-voir-invites="1"><strong>🤝 Duel à deux</strong><br>${esc(mi[2])}<small>Touche pour répondre</small></div>`;
+    let h = ancienBulle({ ...m, contenu: c });
+    if (th) h = h.replace('<div class="bulle ', `<div data-th="${esc(th)}" class="bulle th-${esc(th)} `);
+    return h;
+  };
+}
+
+function apercuMsg(contenu) {
+  const t = String(contenu || "").replace(/^\[\[th:\w+\]\]\s?/, "");
+  if (t.startsWith("[[img:")) return "📷 Photo";
+  if (t.startsWith("[[voc:")) return "🎤 Message vocal";
+  if (t.startsWith("[[appel:")) return "📞 Appel manqué";
+  const i = /^\[\[invite:[^\]]+\]\]\s*([\s\S]*)$/.exec(t);
+  if (i) return "🤝 Duel à deux : " + i[1];
+  const d = /^\[\[duel:[^\]]+\]\]\s*([\s\S]*)$/.exec(t);
+  if (d) return "⚔️ Duel : " + d[1];
+  return t.replace(/\n/g, " ");
+}
+
+document.addEventListener("click", (e) => { if (e.target.closest("[data-voir-invites]")) aller("duels"); });
+
+// ---------- 4. Profils : « en retour » à la place des éclairs ----------
+let profilVuId = null;
+
+async function compterEnRetour(id) {
+  const [a, b] = await Promise.all([
+    db.from("follows").select("follower_id").eq("followed_id", id),
+    db.from("follows").select("followed_id").eq("follower_id", id),
+  ]);
+  if (a.error || b.error) return null;
+  const s = new Set((a.data || []).map((x) => x.follower_id));
+  return (b.data || []).filter((x) => s.has(x.followed_id)).length;
+}
+
+envelopper("chargerProfil", async () => {
+  const el = document.querySelector("#fiche .stats");
+  if (!el || el.querySelector("#stat-retour")) return;
+  el.insertAdjacentHTML("beforeend", '<div class="stat"><strong id="stat-retour">…</strong><span>En retour</span></div>');
+  const n = await compterEnRetour(moi.id);
+  const s = $("#stat-retour");
+  if (s) s.textContent = n === null ? "0" : n;
+}, "profil");
+
+envelopper("voirProfil", async (id) => {
+  if (id === moi.id) return;
+  profilVuId = id;
+  document.querySelectorAll("#fiche-autre .stat").forEach((st) => {
+    const sp = st.querySelector("span");
+    if (sp && sp.textContent === "Éclairs") {
+      sp.textContent = "En retour";
+      const nb = st.querySelector("strong");
+      nb.textContent = "…";
+      compterEnRetour(id).then((n) => { nb.textContent = n === null ? "–" : n; });
+    }
+  });
+  majEnLigne();
+});
+
+// ---------- 5. Bouton « enregistrer » sur les éclairs ----------
+const ICONE_SAUVER = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
+
+envelopper("chargerFeed", async () => {
+  const { data } = await db.from("reel_prefs").select("reel_id").eq("user_id", moi.id).eq("kind", "saved");
+  const sauves = new Set((data || []).map((x) => x.reel_id));
+  document.querySelectorAll("#liste-reels .reel").forEach((r) => {
+    const actions = r.querySelector(".reel-actions"), coeur = r.querySelector(".coeur");
+    if (!actions || !coeur || actions.querySelector(".sauve")) return;
+    const id = coeur.dataset.id, on = sauves.has(id);
+    actions.insertAdjacentHTML("beforeend", `<button class="sauve ${on ? "actif" : ""}" data-id="${id}" data-sauve="${on}"><span>${ICONE_SAUVER}</span><small>${on ? "Gardé" : "Sauver"}</small></button>`);
+  });
+}, "feed");
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest(".sauve");
+  if (!b) return;
+  const on = b.dataset.sauve === "true";
+  const { error } = on
+    ? await db.from("reel_prefs").delete().eq("user_id", moi.id).eq("reel_id", b.dataset.id).eq("kind", "saved")
+    : await db.from("reel_prefs").insert({ user_id: moi.id, reel_id: b.dataset.id, kind: "saved" });
+  if (error) return msg(error.message);
+  b.dataset.sauve = String(!on);
+  b.classList.toggle("actif", !on);
+  b.querySelector("small").textContent = on ? "Sauver" : "Gardé";
+  msg(on ? "Retiré des enregistrements" : "Éclair enregistré, retrouve-le dans ton profil");
+});
+
+// ---------- 6. Appels : sonnerie pour celui qui appelle + appel manqué ----------
+function wavSimple(taux, secondes, f) {
+  const n = Math.floor(taux * secondes), buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const w = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVE"); w(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, taux, true);
+  v.setUint32(28, taux * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, f(i / taux))) * 32767, true);
+  return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+}
+let vsRing = null, vsEnLancement = false;
+function creerRing() {
+  const a = new Audio(wavSimple(16000, 4, (t) => (t < 1.4
+    ? (Math.sin(2 * Math.PI * 440 * t) + Math.sin(2 * Math.PI * 480 * t)) * 0.3 * Math.min(1, t * 40, (1.4 - t) * 40) : 0)));
+  a.loop = true;
+  a.volume = 0.8;
+  return a;
+}
+setInterval(() => {
+  if (vsRing && !vsRing.paused && !(vsEnLancement || (appel && !appel.debut && appel.sortant))) vsRing.pause();
+}, 400);
+
+{
+  const ancienLancer = window.lancerAppel;
+  window.lancerAppel = async function (video = false) {
+    if (!dest || appel) return;
+    vsEnLancement = true;
+    try {
+      vsRing = vsRing || creerRing();
+      vsRing.currentTime = 0;
+      vsRing.play().catch(() => {});
+      await ancienLancer(video);
+      if (appel) { appel.sortant = true; appel.videoAppel = !!video; }
+    } finally { vsEnLancement = false; }
+  };
+  const ancienTerminer = window.terminerAppel;
+  window.terminerAppel = function (prevenir = true) {
+    const a = appel;
+    if (a && a.sortant && !a.debut && prevenir) {
+      db.rpc("envoyer_message", { p_dest: a.autre, p_texte: "[[appel:manque|" + (a.videoAppel ? "video" : "audio") + "]]" })
+        .then(() => { if (dest && dest.id === a.autre) { cleChat = ""; rafraichirChat(); } });
+    }
+    return ancienTerminer(prevenir);
+  };
+}
+
+// ---------- 7. Comptes multiples (8 maximum) ----------
+function lireComptes() {
+  try { return JSON.parse(localStorage.getItem("vs_comptes") || "[]"); } catch (e) { return []; }
+}
+function ecrireComptes(liste) {
+  try { localStorage.setItem("vs_comptes", JSON.stringify(liste.slice(0, VS_MAX_COMPTES))); } catch (e) {}
+}
+function sauverCompte(session) {
+  const u = session.user, tous = lireComptes();
+  const maj = { id: u.id, email: u.email || "", access_token: session.access_token, refresh_token: session.refresh_token };
+  if (tous.some((c) => c.id === u.id)) ecrireComptes(tous.map((c) => (c.id === u.id ? { ...c, ...maj } : c)));
+  else ecrireComptes([...tous.slice(0, VS_MAX_COMPTES - 1), { ...maj }]);
+}
+
+async function changerCompte(id) {
+  if (moi && moi.id === id) return;
+  const c = lireComptes().find((x) => x.id === id);
+  if (!c) return;
+  if (!c.refresh_token) {
+    const f = $("#f-login");
+    if (!moi && f) { $("#f-signup").hidden = true; f.hidden = false; f.email.value = c.email; f.password.focus(); }
+    return msg("Entre le mot de passe de ce compte.");
+  }
+  msg("Changement de compte…");
+  const { error } = await db.auth.setSession({ access_token: c.access_token, refresh_token: c.refresh_token });
+  if (error) {
+    ecrireComptes(lireComptes().map((x) => (x.id === id ? { ...x, access_token: "", refresh_token: "" } : x)));
+    msg("Session expirée : reconnecte-toi avec le mot de passe.");
+    if (moi) { await db.auth.signOut({ scope: "local" }); } else afficherComptesAuth();
+  }
+}
+
+async function ajouterCompte() {
+  if (lireComptes().length >= VS_MAX_COMPTES) return msg("Maximum " + VS_MAX_COMPTES + " comptes.");
+  await db.auth.signOut({ scope: "local" });
+}
+
+function afficherComptesAuth() {
+  const form = document.getElementById("f-login");
+  if (!form) return;
+  let box = document.getElementById("comptes-auth");
+  if (!box) { box = document.createElement("div"); box.id = "comptes-auth"; form.before(box); }
+  const liste = lireComptes().filter((c) => c.email);
+  box.innerHTML = liste.length
+    ? `<p class="secondaire">Comptes sur ce téléphone (touche pour te connecter)</p>` + liste.map((c) => {
+        const nom = c.pseudo || c.email;
+        return `<div class="rang" data-switch-compte="${esc(c.id)}" style="cursor:pointer">${miniAvatar({ avatar_url: c.avatar_url, pseudo: nom })}<span class="nom">${c.pseudo ? "@" + esc(c.pseudo) : esc(c.email)}</span>
+          <button type="button" class="lien" data-oublier-compte="${esc(c.id)}" style="margin:0">Retirer</button></div>`;
+      }).join("")
+    : "";
+}
+
+function rendreComptes() {
+  const box = $("#liste-comptes");
+  if (!box) return;
+  const l = lireComptes();
+  box.innerHTML = l.map((c) => {
+    const nom = c.pseudo || c.email, actuel = moi && moi.id === c.id;
+    return `<div class="rang">${miniAvatar({ avatar_url: c.avatar_url, pseudo: nom })}<span class="nom">${c.pseudo ? "@" + esc(c.pseudo) : esc(c.email)}</span>
+      ${actuel ? '<span class="score">Actuel</span>' : `<button type="button" class="bouton contour" data-switch-compte="${esc(c.id)}">Changer</button>`}</div>`;
+  }).join("") + `<button type="button" class="bouton large" id="ajouter-compte" style="margin-top:12px">+ Ajouter un compte (${l.length}/${VS_MAX_COMPTES})</button>`;
+}
+
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-oublier-compte]")) return;
+  if (e.target.closest("#ajouter-compte")) return ajouterCompte();
+  const sw = e.target.closest("[data-switch-compte]");
+  if (sw) changerCompte(sw.dataset.switchCompte);
+});
+
+$("#deconnexion").onclick = () => {
+  if (!confirm("Te déconnecter de ce compte ?")) return;
+  if (moi) retirerCompte(moi.id);
+  db.auth.signOut();
+};
+
+// ---------- 8. En ligne (présence) ----------
+let canalPresence = null;
+const enLigne = new Set();
+const montrerEnLigne = () => localStorage.getItem("vs_ligne") !== "0";
+
+function demarrerPresence() {
+  if (!moi) return;
+  if (canalPresence) db.removeChannel(canalPresence);
+  enLigne.clear();
+  const c = db.channel("vs-presence", { config: { presence: { key: moi.id } } });
+  canalPresence = c;
+  c.on("presence", { event: "sync" }, () => {
+    enLigne.clear();
+    Object.keys(c.presenceState()).forEach((k) => enLigne.add(k));
+    majEnLigne();
+  }).subscribe(async (s) => { if (s === "SUBSCRIBED" && montrerEnLigne() && !document.hidden) await c.track({ t: Date.now() }); });
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!canalPresence) return;
+  if (document.hidden) canalPresence.untrack();
+  else if (montrerEnLigne()) canalPresence.track({ t: Date.now() });
+});
+
+function majEnLigne() {
+  document.querySelectorAll(".conv[data-id] .nom, .rang[data-profil] .nom").forEach((n) => {
+    const ligne = n.closest(".conv[data-id], .rang[data-profil]");
+    const id = ligne.dataset.id || ligne.dataset.profil;
+    const a = n.querySelector(".pt-ligne"), on = enLigne.has(id);
+    if (on && !a) n.insertAdjacentHTML("afterbegin", '<i class="pt-ligne"></i>');
+    else if (!on && a) a.remove();
+  });
+  document.querySelectorAll("[data-note-de]").forEach((n) => n.classList.toggle("en-ligne-av", enLigne.has(n.dataset.noteDe)));
+  const poser = (el, id) => {
+    if (!el) return;
+    const s = el.querySelector(".statut"), on = !!id && enLigne.has(id);
+    if (on && !s) el.insertAdjacentHTML("beforeend", '<small class="statut"><i class="pt-ligne"></i>En ligne</small>');
+    else if (!on && s) s.remove();
+  };
+  if ($("#chat") && !$("#chat").hidden && dest) poser($("#chat-titre"), dest.id);
+  poser(document.querySelector("#fiche-autre h1"), pageActuelle === "autre" ? profilVuId : null);
+}
+setInterval(majEnLigne, 2000);
+
+// ---------- 9. Duel à deux ----------
+const optionsCat = ["Mode", "Beauté", "Humour", "Sport", "Musique", "Gaming", "Créativité", "Lifestyle"].map((c) => `<option>${c}</option>`).join("");
+const invitesDuo = new Map();
+
+(() => {
+  const zone = document.createElement("div");
+  zone.id = "invites-duo";
+  const f = document.createElement("form");
+  f.id = "f-duo";
+  f.className = "carte";
+  f.innerHTML = `<h2 style="margin-top:0">Duel à deux 🤝</h2>
+    <p class="secondaire">Toi et un ami envoyez chacun une photo ou une vidéo : le duel démarre dès qu'il accepte.</p>
+    <input name="titre" placeholder="Titre du duel" minlength="3" maxlength="50" required>
+    <select name="categorie">${optionsCat}</select>
+    <select name="ami" required><option value="">Choisir un ami…</option></select>
+    <label>Ton contenu (photo ou vidéo, 30 Mo max)</label>
+    <input name="a" type="file" accept="image/*,video/*" required>
+    <button class="bouton large" style="margin-top:10px">Envoyer l'invitation</button>`;
+  $("#f-duel").before(zone, f);
+
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const fa = f.a.files[0];
+      const type = fa.type.startsWith("video/") ? "video" : "image";
+      msg("Envoi en cours…");
+      const url = await envoyerImage(fa, true);
+      const titre = f.titre.value.trim();
+      const { data, error } = await db.from("duel_invites")
+        .insert({ to_id: f.ami.value, titre, categorie: f.categorie.value, media_a: url, type }).select("id").single();
+      if (error) throw error;
+      await db.rpc("envoyer_message", { p_dest: f.ami.value, p_texte: "[[invite:" + data.id + "]] " + titre });
+      f.reset();
+      msg("Invitation envoyée !");
+      afficherInvites();
+    } catch (err) { msg(err.message); }
+  };
+})();
+
+async function afficherInvites() {
+  const box = $("#invites-duo");
+  if (!box || !moi) return;
+  const [{ data, error }, { data: amis }] = await Promise.all([
+    db.from("duel_invites")
+      .select("id,from_id,to_id,titre,categorie,media_a,type,de:profiles!duel_invites_from_id_fkey(pseudo),vers:profiles!duel_invites_to_id_fkey(pseudo)")
+      .eq("statut", "attente").order("created_at", { ascending: false }),
+    db.from("follows").select("followed_id,profiles!follows_followed_id_fkey(pseudo)").eq("follower_id", moi.id),
+  ]);
+  const sel = $("#f-duo").ami, courant = sel.value;
+  sel.innerHTML = '<option value="">Choisir un ami…</option>' + (amis || []).map((x) => `<option value="${x.followed_id}">@${esc(x.profiles.pseudo)}</option>`).join("");
+  sel.value = courant;
+  if (error || !data || !data.length) { box.innerHTML = ""; return; }
+  invitesDuo.clear();
+  data.forEach((d) => invitesDuo.set(d.id, d));
+  const recues = data.filter((d) => d.to_id === moi.id), envoyees = data.filter((d) => d.from_id === moi.id);
+  let h = "";
+  if (recues.length) {
+    h += `<div class="carte"><h2 style="margin-top:0">Invitations reçues</h2>` + recues.map((d) => `<div class="invite-duo">
+      <strong>${esc(d.titre)}</strong><p class="secondaire">${esc(d.categorie)}, de @${esc(d.de.pseudo)}</p>
+      ${d.type === "video" ? `<video class="media" src="${esc(d.media_a)}#t=0.001" controls playsinline preload="metadata"></video>` : `<img class="media zoom" src="${esc(d.media_a)}" alt="">`}
+      <label>Ton contenu (${d.type === "video" ? "une vidéo" : "une photo"})</label>
+      <input type="file" accept="${d.type === "video" ? "video/*" : "image/*"}" data-duo-fichier="${d.id}">
+      <div class="deux"><button type="button" class="bouton large" data-duo-ok="${d.id}">Relever le défi</button>
+      <button type="button" class="bouton contour large" data-duo-non="${d.id}">Refuser</button></div></div>`).join("") + `</div>`;
+  }
+  if (envoyees.length) {
+    h += `<div class="carte"><h2 style="margin-top:0">Invitations envoyées</h2>` + envoyees.map((d) => `<div class="ligne">
+      <span>${esc(d.titre)} · attend @${esc(d.vers.pseudo)}</span><button type="button" class="bouton contour" data-duo-non="${d.id}">Annuler</button></div>`).join("") + `</div>`;
+  }
+  box.innerHTML = h;
+}
+
+envelopper("chargerDuels", afficherInvites, "duels");
+
+document.addEventListener("click", async (e) => {
+  const non = e.target.closest("[data-duo-non]");
+  if (non) {
+    const { error } = await db.from("duel_invites").delete().eq("id", non.dataset.duoNon);
+    msg(error ? error.message : "Invitation retirée");
+    return afficherInvites();
+  }
+  const ok = e.target.closest("[data-duo-ok]");
+  if (!ok) return;
+  const inv = invitesDuo.get(ok.dataset.duoOk);
+  const champ = document.querySelector(`[data-duo-fichier="${ok.dataset.duoOk}"]`);
+  const fb = champ && champ.files[0];
+  if (!inv || !fb) return msg("Choisis d'abord ton contenu.");
+  const tb = fb.type.startsWith("video/") ? "video" : "image";
+  if (tb !== inv.type) return msg("Il faut " + (inv.type === "video" ? "une vidéo" : "une photo") + ", comme ton ami.");
+  try {
+    ok.disabled = true;
+    msg("Envoi en cours…");
+    const b = await envoyerImage(fb, true);
+    const titre = (inv.titre + " · @" + inv.de.pseudo + " × @" + moi.pseudo).slice(0, 80);
+    const { error } = await db.rpc("creer_duel", { p_titre: titre, p_cat: inv.categorie, p_a: inv.media_a, p_b: b, p_type: inv.type });
+    if (error) throw error;
+    await db.from("duel_invites").update({ statut: "accepte" }).eq("id", inv.id);
+    db.rpc("envoyer_message", { p_dest: inv.from_id, p_texte: "Ton duel à deux « " + inv.titre + " » est lancé ! Va voter dans Duels." });
+    msg("Duel lancé !");
+    await majProfil();
+    chargerDuels();
+  } catch (err) { msg(err.message); ok.disabled = false; }
+});
+
+// ---------- 10. Notifications même quand VS est fermé (Web Push) ----------
+function b64Vers8(b) {
+  const s = (b + "=".repeat((4 - (b.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+}
+async function activerPush(silencieux) {
+  const dire = (t) => { if (!silencieux) msg(t); };
+  if (!moi) return;
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window))
+    return dire("Non disponible ici. Sur iPhone : ajoute VS à l'écran d'accueil (iOS 16.4 minimum).");
+  if (VS_VAPID.startsWith("COLLE")) return dire("Clé VAPID manquante dans app4.js.");
+  try {
+    if (Notification.permission === "default" && !silencieux) await Notification.requestPermission();
+    if (Notification.permission !== "granted") return dire("Autorise les notifications dans les réglages du téléphone.");
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64Vers8(VS_VAPID) });
+    const { error } = await db.rpc("enregistrer_push", { p_endpoint: sub.endpoint, p_data: sub.toJSON() });
+    if (error) throw error;
+    dire("Notifications activées, même quand VS est fermé !");
+    majCartesExtras();
+  } catch (err) { dire("Impossible d'activer : " + err.message); }
+}
+
+// ---------- 11. Cartes ajoutées dans les paramètres ----------
+(() => {
+  const ou = $("#desactiver");
+  const c1 = document.createElement("div");
+  c1.className = "carte";
+  c1.innerHTML = `<h2 style="margin-top:0">Couleur de VS</h2>
+    <div class="pastilles-couleur">${Object.entries(COULEURS).map(([k, v]) =>
+      `<button type="button" class="pastille" data-couleur-vs="${k}" aria-label="${v[0]}" style="background:linear-gradient(135deg,${v[1]},${v[3]})"></button>`).join("")}</div>`;
+  const c2 = document.createElement("div");
+  c2.className = "carte";
+  c2.innerHTML = `<h2 style="margin-top:0">Mes comptes</h2><div id="liste-comptes"></div>`;
+  const c3 = document.createElement("div");
+  c3.className = "carte";
+  c3.innerHTML = `<h2 style="margin-top:0">Présence et alertes</h2>
+    <label><input type="checkbox" id="opt-ligne"> Montrer quand je suis en ligne</label>
+    <button type="button" class="bouton contour" id="btn-push" style="margin-top:10px">Activer les notifications (VS fermé)</button>
+    <p class="secondaire" id="etat-push"></p>`;
+  ou.before(c1, c2, c3);
+
+  c1.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-couleur-vs]");
+    if (!b) return;
+    localStorage.setItem("vs_couleur", b.dataset.couleurVs);
+    appliquerCouleur(b.dataset.couleurVs);
+    majCartesExtras();
+  });
+  $("#opt-ligne").onchange = (e) => {
+    localStorage.setItem("vs_ligne", e.target.checked ? "1" : "0");
+    if (canalPresence) { if (e.target.checked) canalPresence.track({ t: Date.now() }); else canalPresence.untrack(); }
+  };
+  $("#btn-push").onclick = () => activerPush(false);
+})();
+
+function majCartesExtras() {
+  const cur = localStorage.getItem("vs_couleur") || "violet";
+  document.querySelectorAll("[data-couleur-vs]").forEach((b) => b.classList.toggle("actif", b.dataset.couleurVs === cur));
+  $("#opt-ligne").checked = montrerEnLigne();
+  const etat = $("#etat-push");
+  if (etat) etat.textContent = !("Notification" in window) ? "Non disponible sur cet appareil."
+    : Notification.permission === "granted" ? "Activées sur cet appareil." : Notification.permission === "denied" ? "Bloquées dans les réglages du téléphone." : "Pas encore activées.";
+  rendreComptes();
+}
+
+{
+  const ancien = chargeurs.parametres;
+  chargeurs.parametres = async () => { await ancien(); majCartesExtras(); };
+}
+
+// ---------- 12. Démarrage ----------
+{
+  const ancienDemarrer = window.demarrer;
+  window.demarrer = async function (user) {
+    await ancienDemarrer(user);
+    demarrerPresence();
+    activerPush(true);
+  };
+}
+
+db.auth.onAuthStateChange((event, session) => {
+  if (!session) {
+    if (canalPresence) { db.removeChannel(canalPresence); canalPresence = null; }
+    enLigne.clear();
+  }
+});
+ 
