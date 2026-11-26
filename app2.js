@@ -16,7 +16,7 @@ function bulle(m) {
   const mv = /^\[\[voc:([^\]|]+)(?:\|(\d+))?\]\]$/.exec(m.contenu || "");
   if (mv) {
     const dv = Number(mv[2] || 0);
-    return `<div class="bulle ${moiMsg}"><audio src="${esc(mv[1])}" controls preload="metadata"></audio><small>🎤 ${Math.floor(dv / 60)}:${String(dv % 60).padStart(2, "0")}</small></div>`;
+    return vocalHtml(mv[1], dv, moiMsg);
   }
   if (m.story_id) {
     const media = m.stories
