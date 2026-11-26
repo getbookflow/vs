@@ -55,7 +55,7 @@ async function majProfil() {
 }
 
 // ---------- Connexion / inscription ----------
-function ecran(nom) { $("#auth").hidden = nom !== "auth"; $("#app").hidden = nom !== "app"; }
+function ecran(nom) { $("#auth").hidden = nom !== "auth"; $("#app").hidden = nom !== "app"; if (nom === "auth") afficherComptesAuth(); }
 ecran("auth");
 
 $("#vers-inscription").onclick = () => { $("#f-login").hidden = true; $("#f-signup").hidden = false; };
@@ -97,7 +97,7 @@ $("#oubli").onclick = async () => {
   msg(error ? error.message : "E-mail de réinitialisation envoyé.");
 };
 
-$("#deconnexion").onclick = () => { if (confirm("Te déconnecter de VS ?")) db.auth.signOut(); };
+$("#deconnexion").onclick = () => { if (confirm("Te déconnecter de VS ?")) { if (moi) retirerCompte(moi.id); db.auth.signOut(); } };
 
 db.auth.onAuthStateChange((event, session) => {
   if (event === "PASSWORD_RECOVERY") {
@@ -110,10 +110,12 @@ db.auth.onAuthStateChange((event, session) => {
     }, 0);
   }
   if (session) {
+    sauverCompte(session);
     if (!moi || moi.id !== session.user.id) setTimeout(() => demarrer(session.user), 0);
   } else {
     moi = null;
     if (canalNotifs) { db.removeChannel(canalNotifs); canalNotifs = null; }
+    if (canalAppels) { db.removeChannel(canalAppels); canalAppels = null; }
     chargement($("#f-login"), false);
     chargement($("#f-signup"), false);
     ecran("auth");
@@ -125,9 +127,14 @@ async function demarrer(user) {
   if (error) { chargement($("#f-login"), false); return msg("Profil introuvable. Reconnecte-toi."); }
   moi = data;
   courriel = user.email || "";
+  dest = null; clearInterval(minuteur); terminerAppel(false); fermerEntrant(); annulerVocal();
+  majCompteSauve();
   $("#solde").textContent = moi.abonnes;
   ecran("app");
+  if (canalNotifs) { db.removeChannel(canalNotifs); canalNotifs = null; }
+  if (canalAppels) { db.removeChannel(canalAppels); canalAppels = null; }
   ecouterNotifs();
+  ecouterAppels();
   nettoyerMesStories();
   reactiverSiBesoin(user.id);
   majBadges();
@@ -174,7 +181,7 @@ async function chargerFeed() {
   if (error) { box.textContent = "Erreur de chargement : " + error.message; return; }
   const suit = new Set((sv || []).map((x) => x.followed_id));
   const cache = new Set((caches || []).map((c) => c.reel_id));
-  const data = tous.filter((r) => !mutes.has(r.user_id) && !cache.has(r.id));
+  const data = tous.filter((r) => !mutes.has(r.user_id) && !cache.has(r.id) && !contientMotMasque(r.legende));
   box.innerHTML = data.length
     ? data.map((r) => `<article class="reel">
         <video src="${esc(r.video_url)}#t=0.001" loop muted playsinline preload="${eco() ? "none" : "metadata"}"></video>
@@ -196,7 +203,9 @@ async function chargerStories() {
     .gt("created_at", new Date(Date.now() - 864e5).toISOString()).order("created_at", { ascending: true });
   histoires = new Map();
   const mutes = await enSourdine();
-  (data || []).filter((s) => !mutes.has(s.user_id)).forEach((s) => {
+  const { data: svs } = await db.from("follows").select("followed_id").eq("follower_id", moi.id);
+  const suivis = new Set((svs || []).map((x) => x.followed_id));
+  (data || []).filter((s) => !mutes.has(s.user_id) && (s.user_id === moi.id || suivis.has(s.user_id))).forEach((s) => {
     if (!histoires.has(s.user_id)) histoires.set(s.user_id, { pseudo: s.profiles.pseudo, avatar: s.profiles.avatar_url, items: [] });
     histoires.get(s.user_id).items.push(s);
   });
@@ -343,7 +352,7 @@ async function chargerDuels() {
     const { data: pr } = await db.from("profiles").select("pseudo").in("id", [...mutes]);
     pseudosCaches = new Set((pr || []).map((x) => x.pseudo));
   }
-  const data = tous.filter((d) => !caches.has(String(d.id)) && !pseudosCaches.has(d.pseudo));
+  const data = tous.filter((d) => !caches.has(String(d.id)) && !pseudosCaches.has(d.pseudo) && !contientMotMasque(d.titre));
   box.innerHTML = data.length
     ? data.map((d) => {
         const a = Number(d.votes_a), b = Number(d.votes_b), t = a + b;
@@ -455,6 +464,8 @@ let dest = null, minuteur = null;
 
 async function chargerMessages() {
   clearInterval(minuteur);
+  annulerVocal();
+  chargerNotes();
   dest = null;
   $("#chat").hidden = true;
   $("#conversations").hidden = false;
@@ -469,9 +480,10 @@ async function chargerMessages() {
   });
   if (!vus.size) { box.innerHTML = `<p class="secondaire">Aucune conversation. Cherche un pseudo ci-dessus.</p>`; return; }
   const nonLus = new Set(data.filter((m) => m.receiver_id === moi.id && !m.lu).map((m) => m.sender_id));
-  const { data: profs } = await db.from("profiles").select("id,pseudo").in("id", [...vus.keys()]);
-  box.innerHTML = (profs || []).map((p) => `<div class="rang conv" data-id="${p.id}" data-pseudo="${esc(p.pseudo)}">
-    <span class="nom">${nonLus.has(p.id) ? "● " : ""}@${esc(p.pseudo)}</span><span class="score">${esc(vus.get(p.id).contenu.replace(/^\[\[duel:[^\]]*\]\]\s*/, "⚔️ Duel : ").slice(0, 28))}</span></div>`).join("");
+  const { data: profs } = await db.from("profiles").select("id,pseudo,avatar_url").in("id", [...vus.keys()]);
+  const ordre = [...vus.keys()];
+  box.innerHTML = [...(profs || [])].sort((x, y) => ordre.indexOf(x.id) - ordre.indexOf(y.id)).map((p) => `<div class="rang conv" data-id="${p.id}" data-pseudo="${esc(p.pseudo)}">${miniAvatar(p)}
+    <span class="nom">${nonLus.has(p.id) ? "● " : ""}@${esc(p.pseudo)}</span><span class="score">${esc(apercuMsg(vus.get(p.id).contenu).slice(0, 28))}</span></div>`).join("");
 }
 
 function ouvrirChat(id, pseudo) {
@@ -479,6 +491,8 @@ function ouvrirChat(id, pseudo) {
   $("#conversations").hidden = true;
   $("#chat").hidden = false;
   $("#chat-titre").textContent = "@" + pseudo;
+  $("#chat-titre").dataset.profil = id;
+  $("#chat-titre").style.cursor = "pointer";
   $("#fil-chat").innerHTML = "";
   cleChat = "";
   marquerLus();
@@ -581,7 +595,7 @@ async function ouvrirCommentaires(id, bouton) {
     .select("contenu,created_at,profiles!reel_comments_user_id_fkey(pseudo)")
     .eq("reel_id", id).order("created_at", { ascending: true }).limit(100);
   $("#liste-comm").innerHTML = error ? "Erreur : " + esc(error.message)
-    : data.length ? data.map((c) => `<div class="notif"><strong>@${esc(c.profiles.pseudo)}</strong> ${esc(c.contenu)}</div>`).join("")
+    : data.length ? data.filter((c) => !contientMotMasque(c.contenu)).map((c) => `<div class="notif"><strong>@${esc(c.profiles.pseudo)}</strong> ${esc(c.contenu)}</div>`).join("")
     : `<p class="secondaire">Aucun commentaire. Écris le premier !</p>`;
   $("#liste-comm").scrollTop = $("#liste-comm").scrollHeight;
 }
@@ -701,6 +715,7 @@ async function ouvrirMenu(b) {
 
 async function action(id) {
   if (id.startsWith("duel-")) return actionDuel(id);
+  if (id.startsWith("note-")) return actionNote(id);
   const c = cible;
   if (id === "act-signaler") {
     $("#menu-actions").innerHTML = `<p class="secondaire">Pourquoi signales-tu ce contenu ?</p>`
@@ -850,6 +865,13 @@ function bulle(m) {
   const moiMsg = m.sender_id === moi.id ? "moi" : "";
   const md = /^\[\[duel:([^\]]+)\]\]\s*([\s\S]*)$/.exec(m.contenu || "");
   if (md) return `<div class="bulle ${moiMsg}" data-voir-duel="${esc(md[1])}"><strong>⚔️ Duel VS</strong><br>${esc(md[2])}<small>Touche pour voir et voter</small></div>`;
+  const mi = /^\[\[img:([^\]]+)\]\]$/.exec(m.contenu || "");
+  if (mi) return `<div class="bulle ${moiMsg}"><img class="zoom" src="${esc(mi[1])}" alt="Photo"></div>`;
+  const mv = /^\[\[voc:([^\]|]+)(?:\|(\d+))?\]\]$/.exec(m.contenu || "");
+  if (mv) {
+    const dv = Number(mv[2] || 0);
+    return `<div class="bulle ${moiMsg}"><audio src="${esc(mv[1])}" controls preload="metadata"></audio><small>🎤 ${Math.floor(dv / 60)}:${String(dv % 60).padStart(2, "0")}</small></div>`;
+  }
   if (m.story_id) {
     const media = m.stories
       ? (m.stories.type === "video"
@@ -905,6 +927,7 @@ function alerter(texte) {
   jouerSon();
   msg(texte);
   if (pageActuelle === "notifs") chargerNotifs(); else majBadges();
+  if (pageActuelle === "messages" && !dest) chargerMessages();
 }
 
 function ecouterNotifs() {
@@ -940,7 +963,7 @@ async function voirProfil(id) {
   const u = p.data, reels = r.data || [];
   if (u.desactive) { box.innerHTML = '<p class="secondaire">Ce compte est désactivé.</p>'; return; }
   const likes = reels.reduce((n, x) => n + (x.reel_likes[0]?.count ?? 0), 0);
-  histoiresAutre = s.data || [];
+  histoiresAutre = sv.data ? (s.data || []) : [];
   const grand = u.avatar_url ? `<img class="avatar" src="${esc(u.avatar_url)}" alt="">` : `<div class="avatar">${esc(u.pseudo[0].toUpperCase())}</div>`;
   box.innerHTML = `<div class="carte profil">
       <button type="button" class="avatar-btn ${histoiresAutre.length ? "anneau" : ""}" id="avatar-autre">${grand}</button>
@@ -1027,6 +1050,9 @@ $("#f-mdp").onsubmit = async (e) => {
 };
 
 async function chargerParametres() {
+  montrerReglage(null);
+  majHub();
+  majCompteSauve();
   chargerSourdine();
   $("#opt-son").checked = localStorage.getItem("vs_son") !== "0";
   $("#opt-vibre").checked = localStorage.getItem("vs_vibre") !== "0";
@@ -1770,6 +1796,7 @@ function surcoucheOuverte() {
 }
 
 function retourArriere() {
+  if (pageActuelle === "parametres" && regActuel) return montrerReglage(null);
   if (pageActuelle === "messages" && !$("#chat").hidden) return chargerMessages();
   if (["autre", "parametres", "recherche", "notifs"].includes(pageActuelle)) return aller(pagePrecedente === "autre" ? "feed" : pagePrecedente);
   const i = ORDRE_PAGES.indexOf(pageActuelle);
@@ -1785,7 +1812,7 @@ function pageSuivante() {
 (() => {
   const zone = document.querySelector("main");
   zone.addEventListener("touchstart", (e) => {
-    if (e.touches.length !== 1 || surcoucheOuverte() || e.target.closest(".stories, input, textarea, select, .mt-puces, video[controls]")) { swipe = null; return; }
+    if (e.touches.length !== 1 || surcoucheOuverte() || e.target.closest(".stories, .notes-barre, input, textarea, select, .mt-puces, video[controls]")) { swipe = null; return; }
     const t = e.touches[0];
     swipe = { x: t.clientX, y: t.clientY, t: Date.now() };
   }, { passive: true });
@@ -1824,7 +1851,7 @@ function pageSuivante() {
       padding: 8px 16px; border-radius: 999px; font-weight: 800; color: #fff; border: 1px solid var(--neon);
       box-shadow: var(--lueur); pointer-events: none; }
     #tirer { position: fixed; z-index: 40; left: 50%; top: calc(var(--haut, 69px) + 8px); transform: translateX(-50%);
-      padding: 8px 18px; border-radius: 999px; font-size: 0.85rem; font-weight: 700; color: #fff;
+      padding: 8px 18px; border-radius: 999px; font-size: 0.85rem; font-weight: 700; color: var(--blanc);
       background: var(--noir-2); border: 1px solid var(--neon); box-shadow: var(--lueur); pointer-events: none; }
     .entete .logo { cursor: pointer; }`;
   document.head.appendChild(s);
@@ -1859,7 +1886,7 @@ document.querySelector(".entete .logo").onclick = actualiser;
   const enHaut = () => (pageActuelle === "feed" ? $("#liste-reels").scrollTop <= 0 : window.scrollY <= 0);
   document.addEventListener("touchstart", (e) => {
     if (!moi || e.touches.length !== 1 || surcoucheOuverte() || !enHaut()
-      || e.target.closest("input, textarea, select, .stories, .mt-puces, video[controls], #fil-chat, #liste-comm, #menu-actions")) { dep = null; return; }
+      || e.target.closest("input, textarea, select, .stories, .notes-barre, .mt-puces, video[controls], #fil-chat, #liste-comm, #menu-actions")) { dep = null; return; }
     dep = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     dy = 0; dx = 0;
   }, { passive: true });
@@ -2049,19 +2076,4 @@ function voirDuel(id) {
       clearInterval(t);
       el.scrollIntoView({ behavior: "smooth", block: "center" });
       el.style.boxShadow = "0 0 24px var(--neon)";
-      setTimeout(() => { el.style.boxShadow = ""; }, 2500);
-    } else if (++essais > 15) { clearInterval(t); msg("Ce duel n'est plus disponible."); }
-  }, 300);
-}
-
-document.addEventListener("click", async (e) => {
-  const b = e.target.closest("[data-envoyer-duel]");
-  if (b && cible && cible.type === "duel") {
-    $("#menu").hidden = true;
-    const { error } = await db.rpc("envoyer_message", { p_dest: b.dataset.envoyerDuel, p_texte: "[[duel:" + cible.id + "]] " + cible.legende });
-    msg(error ? error.message : "Duel envoyé !");
-    return;
-  }
-  const v = e.target.closest("[data-voir-duel]");
-  if (v) voirDuel(v.dataset.voirDuel);
-});
+      
