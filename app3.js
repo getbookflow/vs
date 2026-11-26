@@ -1016,6 +1016,106 @@ $("#appel-micro").onclick = () => {
   $("#appel-micro small").textContent = piste.enabled ? "Micro" : "Muet";
 };
 
+// ---------- v25 : messages vocaux stylés (petit cercle + onde violette) ----------
+const IC_PLAY = '<svg viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>';
+const IC_PAUSE = '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg>';
+const fmtDuree = (s) => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+
+function vocalHtml(url, duree, moiMsg) {
+  let h = 0;
+  for (let i = 0; i < url.length; i++) h = (Math.imul(h, 31) + url.charCodeAt(i)) >>> 0;
+  let barres = "";
+  for (let i = 0; i < 26; i++) {
+    h = (Math.imul(h, 1103515245) + 12345) >>> 0;
+    barres += `<i style="height:${22 + (h % 79)}%"></i>`;
+  }
+  return `<div class="bulle vocal ${moiMsg}" data-vocal="${esc(url)}" data-duree="${duree}">`
+    + `<button type="button" class="voc-play" aria-label="Écouter le vocal">${IC_PLAY}</button>`
+    + `<div class="voc-onde">${barres}</div><span class="voc-temps">${fmtDuree(duree)}</span></div>`;
+}
+
+(() => {
+  const s = document.createElement("style");
+  s.textContent = `
+    .bulle.vocal { display: flex; align-items: center; gap: 10px; width: 250px; max-width: 82%; padding: 8px 14px 8px 8px; border-radius: 999px; }
+    .voc-play { flex: none; width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; padding: 0;
+      border: none; background: linear-gradient(135deg, var(--neon), var(--violet-fonce)); box-shadow: 0 0 14px rgba(168, 85, 247, 0.6);
+      transition: transform 0.15s ease; }
+    .voc-play:active { transform: scale(0.9); }
+    .voc-play svg { width: 18px; height: 18px; fill: #fff; }
+    .bulle.moi .voc-play { background: rgba(8, 8, 13, 0.85); border: 1px solid rgba(255, 255, 255, 0.35); box-shadow: none; }
+    .bulle.vocal.joue .voc-play { animation: respire 1.4s ease-in-out infinite; }
+    .voc-onde { flex: 1; display: flex; align-items: center; gap: 2px; height: 30px; cursor: pointer; }
+    .voc-onde i { flex: 1; min-width: 2px; border-radius: 2px; background: rgba(255, 255, 255, 0.28); transition: background 0.15s ease; }
+    .voc-onde i.lue { background: var(--neon); box-shadow: 0 0 6px rgba(168, 85, 247, 0.8); }
+    .bulle.moi .voc-onde i { background: rgba(255, 255, 255, 0.35); }
+    .bulle.moi .voc-onde i.lue { background: #fff; box-shadow: 0 0 6px rgba(255, 255, 255, 0.7); }
+    .voc-temps { flex: none; min-width: 32px; text-align: right; font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    #chat-vocal.actif { animation: respire 1.2s ease-in-out infinite; }`;
+  document.head.appendChild(s);
+})();
+
+const voix = new Audio();
+voix.preload = "auto";
+let voixUrl = "";
+const bulleVoix = () => (voixUrl ? document.querySelector(`.bulle[data-vocal="${CSS.escape(voixUrl)}"]`) : null);
+
+function resetBulle(b) {
+  if (!b) return;
+  b.querySelectorAll(".voc-onde i").forEach((x) => x.classList.remove("lue"));
+  b.querySelector(".voc-temps").textContent = fmtDuree(Number(b.dataset.duree) || 0);
+  b.querySelector(".voc-play").innerHTML = IC_PLAY;
+  b.classList.remove("joue");
+}
+
+function majVoix() {
+  const b = bulleVoix();
+  if (!b) return;
+  const total = Number(b.dataset.duree) || (isFinite(voix.duration) ? voix.duration : 0);
+  const p = total ? Math.min(1, voix.currentTime / total) : 0;
+  const barres = b.querySelectorAll(".voc-onde i");
+  const n = Math.round(p * barres.length);
+  barres.forEach((x, i) => x.classList.toggle("lue", i < n));
+  b.querySelector(".voc-temps").textContent = fmtDuree(Math.max(0, total - voix.currentTime));
+  b.querySelector(".voc-play").innerHTML = voix.paused ? IC_PLAY : IC_PAUSE;
+  b.classList.toggle("joue", !voix.paused);
+}
+voix.ontimeupdate = majVoix;
+voix.onplay = majVoix;
+voix.onpause = majVoix;
+voix.onended = () => { const b = bulleVoix(); voixUrl = ""; resetBulle(b); };
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".bulle[data-vocal]");
+  if (!b) return;
+  const url = b.dataset.vocal;
+  if (url !== voixUrl) {
+    const ancien = bulleVoix();
+    voix.pause();
+    resetBulle(ancien);
+    voixUrl = url;
+    voix.src = url;
+  }
+  const lire = () => voix.play().catch(() => msg("Impossible de lire ce vocal."));
+  const onde = e.target.closest(".voc-onde");
+  if (onde) {
+    const r = onde.getBoundingClientRect();
+    const total = Number(b.dataset.duree) || voix.duration || 0;
+    if (total) {
+      const t = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * total;
+      if (voix.readyState >= 1) voix.currentTime = t;
+      else voix.addEventListener("loadedmetadata", () => { voix.currentTime = t; }, { once: true });
+    }
+    if (voix.paused) lire();
+    return;
+  }
+  if (voix.paused) lire(); else voix.pause();
+});
+
+// Le vocal s'arrête quand on quitte la discussion ou l'appli
+document.addEventListener("click", (e) => { if (e.target.closest("#retour, .nav button") && !voix.paused) voix.pause(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) voix.pause(); });
+
 // ---------- Démarrage de VS (une fois les 3 fichiers chargés) ----------
 const chargeurs = { autre: () => {}, recherche: () => {}, parametres: chargerParametres, feed: chargerFeed, duels: chargerDuels, messages: chargerMessages, notifs: chargerNotifs, classement: chargerClassement, profil: chargerProfil };
 
