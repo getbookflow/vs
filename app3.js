@@ -126,6 +126,7 @@ function actualiser() {
   if (!moi || pageActuelle === "autre") return;
   majBadges();
   majProfil();
+  chargerAbonnes();
   if (pageActuelle === "messages" && dest) { cleChat = ""; rafraichirChat(); }
   else aller(pageActuelle);
   msg("VS actualisé");
@@ -235,7 +236,7 @@ async function ouvrirMenuDuel(b) {
   if (mien) l.push(["duel-supprimer", "Supprimer ce duel"]);
   l.push(["duel-envoyer", "Envoyer à un ami"], ["duel-masquer", "Masquer ce duel"], ["duel-partager", "Partager le lien"]);
   if (!mien) {
-    l.push(["duel-suivre", (cible.suit ? "Ne plus suivre " : "Suivre ") + p],
+    l.push(["duel-suivre", (cible.suit ? "Ne plus suivre " : "Suivre ") + p + (!cible.suit && mesAbonnes.has(cible.user) ? " en retour" : "")],
       ["duel-sourdine", "Mettre " + p + " en sourdine"], ["act-signaler", "Signaler"], ["duel-bloquer", "Bloquer " + p]);
   }
   $("#menu-actions").innerHTML = l.map(([id, t]) => `<button class="bouton ${id === "duel-supprimer" ? "" : "contour"} large" id="${id}">${t}</button>`).join("");
@@ -481,12 +482,7 @@ const IC_TEL = '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round"
     .note-bulle { position: absolute; top: 0; left: 50%; transform: translateX(-50%); max-width: 92px; padding: 5px 10px; border-radius: 14px;
       font-size: 0.72rem; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       background: var(--noir-2); border: 1px solid var(--contour); box-shadow: var(--lueur); }
-    .note small { max-width: 74px; font-size: 0.72rem; color: var(--gris); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #appel, #appel-entrant { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 24px; text-align: center;
-      background: radial-gradient(600px 400px at 50% 20%, rgba(91, 33, 182, 0.55), transparent 70%), rgba(8, 8, 13, 0.97); }
-    .appel-boite { width: 100%; max-width: 360px; }
-    .appel-boite .avatar { width: 110px; height: 110px; font-size: 2.4rem; }
-    .appel-boite .deux { margin-top: 28px; }`;
+    .note small { max-width: 74px; font-size: 0.72rem; color: var(--gris); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }`;
   document.head.appendChild(s);
 
   // Notes en haut de Messages
@@ -509,17 +505,6 @@ const IC_TEL = '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round"
     + `<button type="button" class="outil-chat" id="chat-vocal" aria-label="Message vocal">${IC_MICRO}</button>`);
   $("#f-chat").insertAdjacentHTML("afterend", '<input type="file" id="chat-photo-fichier" accept="image/*" hidden>');
 
-  // Écrans d'appel
-  document.body.insertAdjacentHTML("beforeend", `
-    <div id="appel" hidden><div class="appel-boite">
-      <div class="avatar" id="appel-av">?</div><h1 id="appel-nom"></h1><p class="secondaire" id="appel-etat"></p>
-      <div class="deux"><button type="button" class="bouton contour large" id="appel-micro">Couper le micro</button>
-      <button type="button" class="bouton large" id="appel-raccrocher">Raccrocher</button></div>
-      <audio id="appel-audio" autoplay playsinline></audio></div></div>
-    <div id="appel-entrant" hidden><div class="appel-boite">
-      <div class="avatar" id="entrant-av">?</div><h1 id="entrant-nom"></h1><p class="secondaire">t'appelle sur VS…</p>
-      <div class="deux"><button type="button" class="bouton contour large" id="appel-refuser">Refuser</button>
-      <button type="button" class="bouton large" id="appel-accepter">Accepter</button></div></div></div>`);
 })();
 
 // ---------- v23 : notes comme Instagram (24 h, visibles par tes abonnés) ----------
@@ -664,7 +649,111 @@ function annulerVocal() { finirVocal(false); }
 
 $("#chat-vocal").onclick = basculerVocal;
 
-// ---------- v23 : appels audio entre amis ----------
+// ---------- v24 : appels façon Snapchat (audio, vidéo, haut-parleur) ----------
+const IC_HP = '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>';
+const IC_VIDEO = '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m23 7-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';
+const IC_TOURNER = '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg>';
+const IC_CROIX = '<svg viewBox="0 0 24 24" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+const IC_LOUPE = '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>';
+const boutonAppel = (id, ic, texte, classe = "") =>
+  `<button type="button" class="appel-btn ${classe}" id="${id}"><span class="appel-rond">${ic}</span><small>${texte}</small></button>`;
+
+(() => {
+  const s = document.createElement("style");
+  s.textContent = `
+    #appel, #appel-entrant { position: fixed; inset: 0; z-index: 100; overflow: hidden; color: #fff; background: #08080D; }
+    #appel-distant { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
+    #appel:not(.video-distante) #appel-distant { opacity: 0; }
+    #appel.video-distante .appel-fond { display: none; }
+    .appel-fond { position: absolute; inset: 0; display: grid; place-items: center;
+      background: radial-gradient(520px 520px at 50% 38%, rgba(168, 85, 247, 0.5), transparent 70%), linear-gradient(180deg, #1a0b33, #08080D); }
+    .appel-av { width: 140px; height: 140px; margin: 0; font-size: 3rem; overflow: hidden; animation: respire 2s ease-in-out infinite; }
+    .appel-av img { width: 100%; height: 100%; object-fit: cover; }
+    @keyframes respire { 50% { box-shadow: 0 0 0 3px var(--neon), 0 0 70px rgba(168, 85, 247, 0.95); } }
+    .appel-tete { position: absolute; z-index: 2; left: 0; right: 0; top: calc(34px + env(safe-area-inset-top, 0px));
+      padding: 0 16px; text-align: center; text-shadow: 0 0 10px #000; }
+    .appel-tete h1 { font-size: 1.6rem; }
+    .appel-tete p { color: #ddd; }
+    #appel-moi { position: absolute; z-index: 3; right: 14px; top: calc(110px + env(safe-area-inset-top, 0px));
+      width: 30vw; max-width: 150px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 18px; background: #000;
+      border: 2px solid var(--neon); box-shadow: var(--lueur); transform: scaleX(-1); }
+    #appel-moi.arriere { transform: none; }
+    .appel-barre { position: absolute; z-index: 3; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; gap: 12px;
+      padding: 40px 8px calc(30px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(transparent, rgba(8, 8, 13, 0.85)); }
+    .appel-btn { background: none; border: none; padding: 0; color: #fff; font: inherit; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 58px; }
+    .appel-btn small { font-size: 0.7rem; text-shadow: 0 0 6px #000; }
+    .appel-rond { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center;
+      background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.2); backdrop-filter: blur(14px);
+      transition: transform 0.15s ease, background 0.2s ease; }
+    .appel-btn:active .appel-rond { transform: scale(0.9); }
+    .appel-rond svg { width: 26px; height: 26px; stroke: #fff; fill: none; }
+    .appel-btn.actif .appel-rond { background: var(--neon); border-color: var(--neon); box-shadow: 0 0 18px rgba(168, 85, 247, 0.8); }
+    .appel-btn.fin .appel-rond { background: var(--violet-fonce); border: 2px solid var(--neon); box-shadow: 0 0 24px rgba(168, 85, 247, 0.8); }
+    .appel-btn.fin svg { transform: rotate(135deg); }
+    .appel-btn.accepter .appel-rond { width: 66px; height: 66px; background: linear-gradient(135deg, var(--neon), var(--violet-fonce));
+      border: none; animation: respire 1.6s ease-in-out infinite; }
+    #appel-entrant .appel-barre { gap: 30px; }
+    .conv-tete { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .conv-tete h1 { margin: 0; }
+    #f-recherche.compacte { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 12px; }
+    #f-recherche.compacte input { margin: 0; }
+    #f-recherche.compacte .bouton { padding: 11px 16px; }
+    #f-recherche.compacte #resultats { grid-column: 1 / -1; }
+    .notif .suivre { display: block; margin-top: 8px; }`;
+  document.head.appendChild(s);
+
+  document.body.insertAdjacentHTML("beforeend", `
+    <div id="appel" hidden>
+      <video id="appel-distant" playsinline autoplay></video>
+      <div class="appel-fond"><div class="avatar appel-av" id="appel-av"></div></div>
+      <div class="appel-tete"><h1 id="appel-nom"></h1><p id="appel-etat"></p></div>
+      <video id="appel-moi" playsinline autoplay muted hidden></video>
+      <div class="appel-barre">
+        ${boutonAppel("appel-hp", IC_HP, "Haut-parleur", "actif")}
+        ${boutonAppel("appel-cam", IC_VIDEO, "Vidéo")}
+        ${boutonAppel("appel-retourner", IC_TOURNER, "Retourner")}
+        ${boutonAppel("appel-micro", IC_MICRO, "Micro")}
+        ${boutonAppel("appel-raccrocher", IC_TEL, "Raccrocher", "fin")}
+      </div>
+    </div>
+    <div id="appel-entrant" hidden>
+      <div class="appel-fond"><div class="avatar appel-av" id="entrant-av"></div></div>
+      <div class="appel-tete"><h1 id="entrant-nom"></h1><p id="entrant-type"></p></div>
+      <div class="appel-barre">
+        ${boutonAppel("appel-refuser", IC_CROIX, "Refuser")}
+        ${boutonAppel("appel-accepter", IC_TEL, "Audio", "accepter")}
+        ${boutonAppel("appel-accepter-video", IC_VIDEO, "Vidéo", "accepter")}
+      </div>
+    </div>`);
+  $("#appel-retourner").hidden = true;
+
+  // Boutons appel audio et vidéo en haut de la discussion
+  const boite = document.createElement("div");
+  boite.style.cssText = "display:flex;gap:8px;flex:none";
+  $("#chat-appel").before(boite);
+  boite.insertAdjacentHTML("beforeend", `<button type="button" class="outil-chat" id="chat-video" aria-label="Appel vidéo">${IC_VIDEO}</button>`);
+  boite.appendChild($("#chat-appel"));
+
+  // Messages : petite loupe en haut, la recherche s'ouvre en dessous
+  const h1 = $("#conversations h1");
+  const tete = document.createElement("div");
+  tete.className = "conv-tete";
+  h1.before(tete);
+  tete.appendChild(h1);
+  tete.insertAdjacentHTML("beforeend", `<button type="button" class="outil-chat" id="conv-loupe" aria-label="Rechercher un ami">${IC_LOUPE}</button>`);
+  const f = $("#f-recherche");
+  f.classList.add("compacte");
+  f.hidden = true;
+  f.after($("#notes"));
+  $("#conv-loupe").onclick = () => {
+    f.hidden = !f.hidden;
+    $("#conv-loupe").classList.toggle("actif", !f.hidden);
+    if (!f.hidden) f.q.focus();
+    else { f.reset(); $("#resultats").innerHTML = ""; }
+  };
+})();
+
 let canalAppels = null, appel = null, entrant = null, sonnerie = null;
 const ICE = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }];
 const canauxSortants = new Map();
@@ -695,7 +784,7 @@ function ecouterAppels() {
 }
 
 function remplirAvatar(el, p) {
-  el.innerHTML = p.avatar_url ? `<img class="avatar" src="${esc(p.avatar_url)}" alt="" style="margin:0">` : esc((p.pseudo || "?")[0].toUpperCase());
+  el.innerHTML = p.avatar_url ? `<img src="${esc(p.avatar_url)}" alt="">` : esc((p.pseudo || "?")[0].toUpperCase());
 }
 
 async function recuAppel(p) {
@@ -705,6 +794,7 @@ async function recuAppel(p) {
     entrant = { ...p, file: [] };
     remplirAvatar($("#entrant-av"), p);
     $("#entrant-nom").textContent = "@" + p.pseudo;
+    $("#entrant-type").textContent = p.video ? "Appel vidéo sur VS…" : "Appel audio sur VS…";
     $("#appel-entrant").hidden = false;
     jouerSon(true);
     sonnerie = setInterval(() => jouerSon(true), 2500);
@@ -718,6 +808,9 @@ async function recuAppel(p) {
     try { await a.pc.setRemoteDescription(p.sdp); viderIce(); etatAppel("Connexion…"); } catch (e) { terminerAppel(true); }
   } else if (p.type === "ice") {
     if (a.pc.remoteDescription) a.pc.addIceCandidate(p.c).catch(() => {}); else a.file.push(p.c);
+  } else if (p.type === "video") {
+    $("#appel").classList.toggle("video-distante", !!p.on);
+    if (p.on) $("#appel-distant").play().catch(() => {});
   } else if (p.type === "refus") { msg("@" + p.pseudo + " a refusé l'appel."); terminerAppel(false); }
   else if (p.type === "occupe") { msg("@" + p.pseudo + " est déjà en appel."); terminerAppel(false); }
   else if (p.type === "fin") { msg("Appel terminé"); terminerAppel(false); }
@@ -734,11 +827,16 @@ function viderIce() {
 async function preparerAppel(autre, pseudo, avatar_url) {
   const flux = await navigator.mediaDevices.getUserMedia({ audio: true });
   const pc = new RTCPeerConnection({ iceServers: ICE });
-  const a = { pc, flux, autre, pseudo, file: [], debut: 0, minuteur: null, attente: null };
+  const distant = new MediaStream();
+  const a = { pc, flux, autre, pseudo, file: [], debut: 0, minuteur: null, attente: null, distant, video: null, cam: null, face: "user", hp: true };
   appel = a;
-  flux.getTracks().forEach((t) => pc.addTrack(t, flux));
   pc.onicecandidate = (e) => { if (e.candidate && appel === a) signal(autre, { type: "ice", c: e.candidate.toJSON() }).catch(() => {}); };
-  pc.ontrack = (e) => { const au = $("#appel-audio"); au.srcObject = e.streams[0]; au.play().catch(() => {}); };
+  pc.ontrack = (e) => {
+    distant.addTrack(e.track);
+    const v = $("#appel-distant");
+    if (v.srcObject !== distant) v.srcObject = distant;
+    v.play().catch(() => {});
+  };
   pc.onconnectionstatechange = () => {
     if (appel !== a) return;
     if (pc.connectionState === "connected" && !a.debut) {
@@ -753,22 +851,92 @@ async function preparerAppel(autre, pseudo, avatar_url) {
   };
   remplirAvatar($("#appel-av"), { pseudo, avatar_url });
   $("#appel-nom").textContent = "@" + pseudo;
-  $("#appel-micro").textContent = "Couper le micro";
+  $("#appel").classList.remove("video-distante");
+  $("#appel-hp").classList.add("actif");
+  $("#appel-micro").classList.remove("actif");
+  $("#appel-micro small").textContent = "Micro";
+  majVideoMoi();
   $("#appel").hidden = false;
+  return a;
 }
 
-async function lancerAppel() {
+function majVideoMoi() {
+  const a = appel, v = $("#appel-moi");
+  const on = !!(a && a.cam);
+  if (on) {
+    v.srcObject = new MediaStream([a.cam]);
+    v.classList.toggle("arriere", a.face === "environment");
+    v.play().catch(() => {});
+  } else v.srcObject = null;
+  v.hidden = !on;
+  $("#appel-cam").classList.toggle("actif", on);
+  $("#appel-retourner").hidden = !on;
+}
+
+async function ouvrirCam(a) {
+  const f = await navigator.mediaDevices.getUserMedia({ video: { facingMode: a.face, width: { ideal: 640 }, height: { ideal: 960 } } });
+  if (appel !== a) { f.getTracks().forEach((t) => t.stop()); return; }
+  a.cam = f.getVideoTracks()[0];
+  if (a.video) await a.video.sender.replaceTrack(a.cam);
+  majVideoMoi();
+}
+
+async function basculerCamera() {
+  const a = appel;
+  if (!a || !a.video) return;
+  if (a.cam) {
+    a.cam.stop();
+    a.cam = null;
+    await a.video.sender.replaceTrack(null).catch(() => {});
+    majVideoMoi();
+    signal(a.autre, { type: "video", on: false }).catch(() => {});
+    return;
+  }
+  try {
+    await ouvrirCam(a);
+    signal(a.autre, { type: "video", on: true }).catch(() => {});
+  } catch (e) { msg("Impossible d'ouvrir la caméra."); }
+}
+
+async function retournerCamera() {
+  const a = appel;
+  if (!a || !a.cam) return;
+  a.face = a.face === "user" ? "environment" : "user";
+  a.cam.stop();
+  a.cam = null;
+  try { await ouvrirCam(a); } catch (e) { msg("Impossible de changer de caméra."); majVideoMoi(); }
+}
+
+async function basculerHautParleur() {
+  const a = appel;
+  if (!a) return;
+  a.hp = !a.hp;
+  const v = $("#appel-distant");
+  let fait = false;
+  try {
+    if (v.setSinkId && navigator.mediaDevices.enumerateDevices) {
+      const sorties = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audiooutput");
+      const choix = a.hp ? sorties.find((d) => /speaker|haut/i.test(d.label)) : sorties.find((d) => /earpiece|couteur/i.test(d.label));
+      if (choix) { await v.setSinkId(choix.deviceId); v.volume = 1; fait = true; }
+    }
+  } catch (e) {}
+  if (!fait) v.volume = a.hp ? 1 : 0.35;
+  $("#appel-hp").classList.toggle("actif", a.hp);
+}
+
+async function lancerAppel(video = false) {
   if (!dest || appel) return;
   if (!window.RTCPeerConnection || !navigator.mediaDevices) return msg("Les appels ne marchent pas sur ce navigateur.");
   const qui = dest;
   try {
     const { data: pr } = await db.from("profiles").select("avatar_url").eq("id", qui.id).maybeSingle();
-    await preparerAppel(qui.id, qui.pseudo, pr ? pr.avatar_url : "");
-    etatAppel("Appel en cours…");
-    const offre = await appel.pc.createOffer();
-    await appel.pc.setLocalDescription(offre);
-    await signal(qui.id, { type: "offre", sdp: appel.pc.localDescription.toJSON() });
-    const a = appel;
+    const a = await preparerAppel(qui.id, qui.pseudo, pr ? pr.avatar_url : "");
+    a.pc.addTransceiver(a.flux.getAudioTracks()[0], { direction: "sendrecv" });
+    a.video = a.pc.addTransceiver("video", { direction: "sendrecv" });
+    if (video) await ouvrirCam(a).catch(() => msg("Caméra indisponible : appel audio."));
+    etatAppel(video ? "Appel vidéo…" : "Appel…");
+    await a.pc.setLocalDescription(await a.pc.createOffer());
+    await signal(qui.id, { type: "offre", video: !!a.cam, sdp: a.pc.localDescription.toJSON() });
     a.attente = setTimeout(() => { if (appel === a && !a.debut) { msg("Pas de réponse."); terminerAppel(true); } }, 45000);
   } catch (err) {
     terminerAppel(false);
@@ -776,19 +944,26 @@ async function lancerAppel() {
   }
 }
 
-async function accepterAppel() {
+async function accepterAppel(video = false) {
   const p = entrant;
   if (!p) return;
   fermerEntrant();
   try {
-    await preparerAppel(p.de, p.pseudo, p.avatar_url);
+    const a = await preparerAppel(p.de, p.pseudo, p.avatar_url);
     etatAppel("Connexion…");
-    await appel.pc.setRemoteDescription(p.sdp);
-    appel.file.push(...p.file);
+    if (p.video) $("#appel").classList.add("video-distante");
+    await a.pc.setRemoteDescription(p.sdp);
+    const tr = a.pc.getTransceivers();
+    const ta = tr.find((t) => t.receiver.track.kind === "audio");
+    if (ta) { ta.direction = "sendrecv"; await ta.sender.replaceTrack(a.flux.getAudioTracks()[0]); }
+    a.video = tr.find((t) => t.receiver.track.kind === "video") || null;
+    if (a.video) a.video.direction = "sendrecv";
+    a.file.push(...p.file);
     viderIce();
-    const rep = await appel.pc.createAnswer();
-    await appel.pc.setLocalDescription(rep);
-    await signal(p.de, { type: "reponse", sdp: appel.pc.localDescription.toJSON() });
+    if (video) await ouvrirCam(a).catch(() => msg("Caméra indisponible : appel audio."));
+    await a.pc.setLocalDescription(await a.pc.createAnswer());
+    await signal(p.de, { type: "reponse", sdp: a.pc.localDescription.toJSON() });
+    if (a.cam) signal(p.de, { type: "video", on: true }).catch(() => {});
   } catch (err) {
     signal(p.de, { type: "fin" }).catch(() => {});
     terminerAppel(false);
@@ -806,7 +981,7 @@ function fermerEntrant() {
 
 function terminerAppel(prevenir = true) {
   const el = $("#appel");
-  if (el) el.hidden = true;
+  if (el) { el.hidden = true; el.classList.remove("video-distante"); }
   if (!appel) return;
   const a = appel;
   appel = null;
@@ -814,14 +989,20 @@ function terminerAppel(prevenir = true) {
   clearTimeout(a.attente);
   clearInterval(a.minuteur);
   a.flux.getTracks().forEach((t) => t.stop());
+  if (a.cam) a.cam.stop();
   try { a.pc.close(); } catch (e) {}
-  const au = $("#appel-audio");
-  if (au) au.srcObject = null;
+  $("#appel-distant").srcObject = null;
+  majVideoMoi();
 }
 
-$("#chat-appel").onclick = lancerAppel;
+$("#chat-appel").onclick = () => lancerAppel(false);
+$("#chat-video").onclick = () => lancerAppel(true);
 $("#appel-raccrocher").onclick = () => terminerAppel(true);
-$("#appel-accepter").onclick = accepterAppel;
+$("#appel-cam").onclick = basculerCamera;
+$("#appel-retourner").onclick = retournerCamera;
+$("#appel-hp").onclick = basculerHautParleur;
+$("#appel-accepter").onclick = () => accepterAppel(false);
+$("#appel-accepter-video").onclick = () => accepterAppel(true);
 $("#appel-refuser").onclick = () => {
   const p = entrant;
   fermerEntrant();
@@ -831,7 +1012,8 @@ $("#appel-micro").onclick = () => {
   if (!appel) return;
   const piste = appel.flux.getAudioTracks()[0];
   piste.enabled = !piste.enabled;
-  $("#appel-micro").textContent = piste.enabled ? "Couper le micro" : "Réactiver le micro";
+  $("#appel-micro").classList.toggle("actif", !piste.enabled);
+  $("#appel-micro small").textContent = piste.enabled ? "Micro" : "Muet";
 };
 
 // ---------- Démarrage de VS (une fois les 3 fichiers chargés) ----------
