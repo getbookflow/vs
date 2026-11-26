@@ -1,7 +1,7 @@
 /* VS — partie 4 (app4.js) : à charger APRÈS app3.js */
 
 // ---------- Réglage : clé publique des notifications (voir supabase-setup.sql) ----------
-const VS_VAPID = "COLLE_ICI_TA_CLE_VAPID_PUBLIQUE";
+const VS_VAPID = "BEQuMmBt9zJOv4cJRPZ4aHXKE1B5DZEpEh_zK5wD_I2SVb08xrbcXrZHIaV7MzVvc9zlxQLPYijMgBLQLxKOlKI";
 const VS_MAX_COMPTES = 8;
 
 // Évite le flash de la page « mot de passe » au démarrage
