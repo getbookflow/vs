@@ -1,7 +1,7 @@
 /* VS — partie 4 (app4.js) : à charger APRÈS app3.js */
 
 // ---------- Réglage : clé publique des notifications (voir supabase-setup.sql) ----------
-const VS_VAPID = "COLLE_ICI_TA_CLE_VAPID_PUBLIQUE";
+const VS_VAPID = "BEQuMmBt9zJOv4cJRPZ4aHXKE1B5DZEpEh_zK5wD_I2SVb08xrbcXrZHIaV7MzVvc9zlxQLPYijMgBLQLxKOlKI";
 const VS_MAX_COMPTES = 8;
 
 // Évite le flash de la page « mot de passe » au démarrage
@@ -135,7 +135,18 @@ const themeChat = () => (dest ? localStorage.getItem("vs_chat_th_" + dest.id) ||
 
   // Bouton « trois points » en haut de la discussion : menu des thèmes
   const st = document.createElement("style");
-  st.textContent = "#chat-menu svg { fill: var(--blanc); stroke: none; }";
+  st.textContent = `
+    #chat-menu svg { fill: var(--blanc); stroke: none; }
+    #f-chat { position: relative; gap: 8px; padding-top: 6px; }
+    #f-chat #chat-photo { order: 1; width: 48px; height: 48px; }
+    #f-chat #chat-texte { order: 2; flex: 1; min-width: 0; min-height: 50px; max-height: 140px; font-size: 1.1rem;
+      padding: 13px 54px 13px 18px; border-radius: 26px; background: var(--noir-2); }
+    #f-chat #chat-vocal { position: absolute; right: 62px; bottom: 6px; width: 40px; height: 40px; border: none; background: transparent; z-index: 2; }
+    #f-chat #chat-vocal.actif { background: var(--violet-fonce); }
+    #f-chat > .bouton { order: 3; flex: none; width: 50px; height: 50px; padding: 0; border-radius: 50%; display: grid; place-items: center; }
+    #f-chat > .bouton svg { width: 22px; height: 22px; stroke: #fff; fill: none; }`;
+  const envoi = $("#f-chat > .bouton");
+  if (envoi) { envoi.innerHTML = AVION; envoi.setAttribute("aria-label", "Envoyer"); }
   document.head.appendChild(st);
   $("#chat-video").parentNode.insertAdjacentHTML("beforeend",
     '<button type="button" class="outil-chat" id="chat-menu" aria-label="Options de la discussion"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>');
