@@ -81,6 +81,8 @@ function ecouterNotifs() {
   canalNotifs = db.channel("vs-notifs-" + moi.id)
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: "user_id=eq." + moi.id }, (p) => alerter(p.new.texte))
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "follows", filter: "followed_id=eq." + moi.id }, async (p) => {
+      mesAbonnes.add(p.new.follower_id);
+      document.querySelectorAll(`.suivre[data-id="${p.new.follower_id}"]`).forEach((b) => { if (b.dataset.suit !== "true") b.textContent = texteSuivre(p.new.follower_id, false); });
       const { data } = await db.from("profiles").select("pseudo").eq("id", p.new.follower_id).single();
       alerter("@" + (data ? data.pseudo : "Quelqu'un") + " s'est abonné à toi");
     })
