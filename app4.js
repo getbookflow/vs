@@ -8,6 +8,15 @@ const VS_MAX_COMPTES = 8;
 ecran("attente");
 setTimeout(() => { if ($("#auth").hidden && $("#app").hidden) ecran("auth"); }, 5000);
 
+// Si on revient dans l'appli et qu'une session existe, on entre directement
+document.addEventListener("visibilitychange", async () => {
+  if (document.hidden || moi) return;
+  try {
+    const { data } = await db.auth.getSession();
+    if (data && data.session) demarrer(data.session.user);
+  } catch (e) {}
+});
+
 function envelopper(nom, apres, cle) {
   const ancien = window[nom];
   window[nom] = async function (...a) {
@@ -304,8 +313,9 @@ setInterval(() => {
   const ancienTerminer = window.terminerAppel;
   window.terminerAppel = function (prevenir = true) {
     const a = appel;
-    if (a && a.sortant && !a.debut && prevenir) {
-      db.rpc("envoyer_message", { p_dest: a.autre, p_texte: "[[appel:manque|" + (a.videoAppel ? "video" : "audio") + "]]" })
+    if (a && (a.sortant || vsEnLancement) && !a.debut && prevenir) {
+      const v = a.videoAppel !== undefined ? a.videoAppel : !!a.cam;
+      db.rpc("envoyer_message", { p_dest: a.autre, p_texte: "[[appel:manque|" + (v ? "video" : "audio") + "]]" })
         .then(() => { if (dest && dest.id === a.autre) { cleChat = ""; rafraichirChat(); } });
     }
     return ancienTerminer(prevenir);
@@ -624,4 +634,3 @@ db.auth.onAuthStateChange((event, session) => {
     enLigne.clear();
   }
 });
- 
