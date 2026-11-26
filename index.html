@@ -4,16 +4,33 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#08080D">
-  <link rel="manifest" href="manifest.json?v=26">
-  <link rel="icon" type="image/png" href="icon-192.png?v=26">
-  <link rel="apple-touch-icon" href="icon-192.png?v=26">
+  <link rel="manifest" href="manifest.json?v=27">
+  <link rel="icon" type="image/png" href="icon-192.png?v=27">
+  <link rel="apple-touch-icon" href="icon-192.png?v=27">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="VS">
   <title>VS</title>
   <script>try{var t=localStorage.getItem("vs_theme");if(t==="clair"||(t==="auto"&&matchMedia("(prefers-color-scheme: light)").matches))document.documentElement.dataset.theme="light"}catch(e){}</script>
-  <link rel="stylesheet" href="style.css?v=26">
-  <link rel="stylesheet" href="extra.css?v=26">
+  <script>
+    /* Affiche les erreurs directement à l'écran (pour savoir ce qui bloque VS) */
+    window.addEventListener("error", function (e) {
+      var t = e.target;
+      var texte = (t && t !== window && (t.src || t.href))
+        ? "Fichier introuvable : " + (t.src || t.href).split("/").pop()
+        : "Erreur : " + e.message + "\nFichier : " + String(e.filename || "?").split("/").pop() + ", ligne " + e.lineno;
+      var b = document.getElementById("erreur-vs");
+      if (!b) {
+        b = document.createElement("pre");
+        b.id = "erreur-vs";
+        b.style.cssText = "position:fixed;left:10px;right:10px;bottom:10px;z-index:9999;white-space:pre-wrap;padding:14px;border-radius:12px;background:#11111A;border:1px solid #A855F7;color:#fff;font-size:13px";
+        (document.body || document.documentElement).appendChild(b);
+      }
+      b.textContent += texte + "\n\n";
+    }, true);
+  </script>
+  <link rel="stylesheet" href="style.css?v=27">
+  <link rel="stylesheet" href="extra.css?v=27">
 </head>
 <body>
 
@@ -336,8 +353,8 @@
 <div id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="config.js?v=26"></script>
-<script src="app.js?v=26"></script>
+<script src="config.js?v=27"></script>
+<script src="app.js?v=27"></script>
 <script>
   /* Installation de VS comme vraie application (PWA) */
   if ("serviceWorker" in navigator) {
