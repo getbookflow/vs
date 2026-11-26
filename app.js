@@ -116,6 +116,7 @@ async function demarrer(user) {
   nettoyerMesStories();
   reactiverSiBesoin(user.id);
   majBadges();
+  await chargerAbonnes();
   aller("feed");
 }
 
@@ -142,8 +143,17 @@ const lecteur = new IntersectionObserver((entrees) => entrees.forEach((en) => {
   if (en.isIntersecting && !eco() && $("#viewer").hidden) en.target.play().catch(() => {}); else en.target.pause();
 }), { threshold: 0.6 });
 
+let mesAbonnes = new Set();
+async function chargerAbonnes() {
+  if (!moi) return;
+  const { data } = await db.from("follows").select("follower_id").eq("followed_id", moi.id);
+  mesAbonnes = new Set((data || []).map((x) => x.follower_id));
+}
+// « Suivre en retour » quand cette personne te suit déjà
+const texteSuivre = (id, suit) => (suit ? "Suivi" : mesAbonnes.has(id) ? "Suivre en retour" : "Suivre");
+
 const boutonSuivre = (id, suit) =>
-  `<button class="suivre ${suit ? "actif" : ""}" data-id="${id}" data-suit="${suit}">${suit ? "Suivi" : "Suivre"}</button>`;
+  `<button class="suivre ${suit ? "actif" : ""}" data-id="${id}" data-suit="${suit}">${texteSuivre(id, suit)}</button>`;
 
 async function chargerFeed() {
   chargerStories();
@@ -231,7 +241,7 @@ document.addEventListener("click", async (e) => {
     if (error) return msg(error.message);
     document.querySelectorAll(`.suivre[data-id="${sv.dataset.id}"]`).forEach((b) => {
       b.dataset.suit = String(!suit);
-      b.textContent = suit ? "Suivre" : "Suivi";
+      b.textContent = texteSuivre(sv.dataset.id, !suit);
       b.classList.toggle("actif", !suit);
     });
     return;
@@ -285,15 +295,18 @@ $("#cloche").onclick = () => aller("notifs");
 async function chargerNotifs() {
   marquerNotifsVues();
   const box = $("#liste-notifs");
-  const [f, d, n] = await Promise.all([
+  const [f, d, n, mf] = await Promise.all([
     db.from("follows").select("created_at,follower_id,profiles!follows_follower_id_fkey(pseudo)")
       .eq("followed_id", moi.id).order("created_at", { ascending: false }).limit(20),
     db.rpc("mes_duels_stats"),
     db.from("notifications").select("created_at,texte").eq("user_id", moi.id).order("created_at", { ascending: false }).limit(20),
+    db.from("follows").select("followed_id").eq("follower_id", moi.id),
   ]);
   if (f.error || d.error) { box.textContent = "Erreur : " + (f.error || d.error).message; return; }
   const items = [];
-  f.data.forEach((x) => items.push({ t: x.created_at, h: `<strong class="lien-profil" data-profil="${x.follower_id}">@${esc(x.profiles.pseudo)}</strong> s'est abonné à toi` }));
+  const suivisN = new Set((mf.data || []).map((x) => x.followed_id));
+  f.data.forEach((x) => mesAbonnes.add(x.follower_id));
+  f.data.forEach((x) => items.push({ t: x.created_at, h: `<strong class="lien-profil" data-profil="${x.follower_id}">@${esc(x.profiles.pseudo)}</strong> s'est abonné à toi${boutonSuivre(x.follower_id, suivisN.has(x.follower_id))}` }));
   d.data.forEach((x) => {
     const a = Number(x.votes_a), b = Number(x.votes_b), n = a + b;
     const pa = n ? Math.round((a * 100) / n) : 0;
@@ -682,7 +695,7 @@ async function ouvrirMenu(b) {
   if (reel) l.push(["act-envoyer", "Envoyer à un ami"], ["act-partager", "Partager le lien"]);
   if (mien) l.push(["act-supprimer", cible.type === "story" ? "Supprimer cette story" : "Supprimer cet éclair"]);
   else {
-    l.push(["act-suivre", (cible.suit ? "Ne plus suivre " : "Suivre ") + p]);
+    l.push(["act-suivre", (cible.suit ? "Ne plus suivre " : "Suivre ") + p + (!cible.suit && mesAbonnes.has(cible.user) ? " en retour" : "")]);
     if (reel) l.push(["act-pasinteresse", "Pas intéressé"]);
     l.push(["act-sourdine", "Mettre " + p + " en sourdine"], ["act-signaler", "Signaler"], ["act-bloquer", "Bloquer " + p]);
   }
@@ -757,7 +770,7 @@ async function action(id) {
     msg(c.suit ? "Tu ne suis plus @" + c.pseudo : "Tu suis @" + c.pseudo);
     document.querySelectorAll(`.suivre[data-id="${c.user}"]`).forEach((b) => {
       b.dataset.suit = String(!c.suit);
-      b.textContent = c.suit ? "Suivre" : "Suivi";
+      b.textContent = texteSuivre(c.user, !c.suit);
       b.classList.toggle("actif", !c.suit);
     });
     return;
