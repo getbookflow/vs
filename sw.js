@@ -1,4 +1,4 @@
-const CACHE = "vs-v18";
+const CACHE = "vs-v27";
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(["./", "./index.html"])));
@@ -13,7 +13,20 @@ self.addEventListener("activate", (e) => {
   );
 });
 
+// Toujours vérifier la dernière version des fichiers de VS (fini les anciennes versions bloquées)
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
-  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+  const local = new URL(e.request.url).origin === self.location.origin;
+  const requete = local ? new Request(e.request, { cache: "no-cache" }) : e.request;
+  e.respondWith(
+    fetch(requete)
+      .then((r) => {
+        if (local && r.ok && e.request.mode === "navigate") {
+          const copie = r.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copie));
+        }
+        return r;
+      })
+      .catch(() => caches.match(e.request))
+  );
 });
