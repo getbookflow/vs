@@ -788,18 +788,41 @@ setInterval(() => {
       vsRing.currentTime = 0;
       vsRing.play().catch(() => {});
       await ancienLancer(video);
-      if (appel) { appel.sortant = true; appel.videoAppel = !!video; }
+      if (appel) {
+        const a = appel;
+        a.sortant = true;
+        a.videoAppel = !!video;
+        // Prévient le téléphone de l'autre même si VS est fermé
+        db.functions.invoke("swift-api", { body: { type: "appel", to: a.autre, video: !!video } }).catch(() => {});
+        // Renvoie l'appel pendant la sonnerie : l'autre peut l'attraper en ouvrant VS depuis la notification
+        a.relance = setInterval(() => {
+          if (appel !== a || a.debut) { clearInterval(a.relance); return; }
+          signal(a.autre, { type: "offre", video: !!a.cam, sdp: a.pc.localDescription.toJSON() }).catch(() => {});
+        }, 3000);
+      }
     } finally { vsEnLancement = false; }
   };
   const ancienTerminer = window.terminerAppel;
   window.terminerAppel = function (prevenir = true) {
     const a = appel;
+    if (a && a.relance) clearInterval(a.relance);
     if (a && (a.sortant || vsEnLancement) && !a.debut && prevenir) {
       const v = a.videoAppel !== undefined ? a.videoAppel : !!a.cam;
       db.rpc("envoyer_message", { p_dest: a.autre, p_texte: "[[appel:manque|" + (v ? "video" : "audio") + "]]" })
         .then(() => { if (dest && dest.id === a.autre) { cleChat = ""; rafraichirChat(); } });
     }
     return ancienTerminer(prevenir);
+  };
+}
+
+{
+  const ancienRecu = window.recuAppel;
+  window.recuAppel = function (p) {
+    if (p && p.type === "offre") {
+      if (entrant && entrant.de === p.de) { entrant.sdp = p.sdp; return; }
+      if (appel && appel.autre === p.de) return;
+    }
+    return ancienRecu(p);
   };
 }
 
@@ -1098,6 +1121,7 @@ async function activerPush(silencieux) {
   c3.innerHTML = `<h2 style="margin-top:0">Présence et alertes</h2>
     <label><input type="checkbox" id="opt-ligne"> Montrer quand je suis en ligne</label>
     <button type="button" class="bouton contour" id="btn-push" style="margin-top:10px">Activer les notifications (VS fermé)</button>
+    <button type="button" class="bouton contour" id="btn-test-push" style="margin-top:8px">Envoyer une notification test</button>
     <p class="secondaire" id="etat-push"></p>`;
   ou.before(c1, c2, c3);
 
@@ -1113,6 +1137,18 @@ async function activerPush(silencieux) {
     if (canalPresence) { if (e.target.checked) canalPresence.track({ t: Date.now() }); else canalPresence.untrack(); }
   };
   $("#btn-push").onclick = () => activerPush(false);
+  $("#btn-test-push").onclick = async () => {
+    msg("Envoi du test…");
+    const { data, error } = await db.functions.invoke("swift-api", { body: { type: "test" } });
+    if (error) {
+      let t = error.message;
+      try { t = await error.context.text(); } catch (e) {}
+      return alert("Échec du test : " + t);
+    }
+    if (!data.abonnements) return alert("Aucun abonnement trouvé : touche d'abord « Activer les notifications (VS fermé) ».");
+    if (data.envoyes) msg("Test envoyé : la notification arrive.");
+    else alert("Envoi échoué : " + JSON.stringify(data.erreurs));
+  };
 })();
 
 function majCartesExtras() {
