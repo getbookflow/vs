@@ -923,6 +923,35 @@ function majEnLigne() {
 }
 setInterval(majEnLigne, 2000);
 
+// Champ « fichier » au même style que le duel solo
+const VS_IC_ENVOI = '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16"/></svg>';
+const VS_IC_OK = '<svg viewBox="0 0 24 24" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>';
+function ameliorerFichierVS(input) {
+  if (!input || input.hidden || input.dataset.pro) return;
+  input.dataset.pro = "1";
+  const acc = input.accept || "";
+  const img = acc.includes("image"), vid = acc.includes("video");
+  const titre = img && vid ? "Choisir une photo ou une vidéo" : vid ? "Choisir une vidéo" : img ? "Choisir une photo" : "Choisir un fichier";
+  const boite = document.createElement("div");
+  boite.className = "fichier";
+  input.parentNode.insertBefore(boite, input);
+  boite.innerHTML = `<span class="fichier-icone">${VS_IC_ENVOI}</span><span class="fichier-texte"><strong>${titre}</strong><small>Touche pour parcourir</small></span>`;
+  boite.appendChild(input);
+  let url = null;
+  const maj = () => {
+    const f = input.files && input.files[0];
+    if (url) { URL.revokeObjectURL(url); url = null; }
+    boite.classList.toggle("choisi", !!f);
+    const ic = boite.querySelector(".fichier-icone"), sm = boite.querySelector("small");
+    if (!f) { ic.innerHTML = VS_IC_ENVOI; sm.textContent = "Touche pour parcourir"; return; }
+    if (f.type.startsWith("image/")) { url = URL.createObjectURL(f); ic.innerHTML = `<img src="${url}" alt="">`; }
+    else ic.innerHTML = VS_IC_OK;
+    sm.textContent = f.name + " · " + (f.size / 1048576).toFixed(1) + " Mo";
+  };
+  input.addEventListener("change", maj);
+  if (input.form) input.form.addEventListener("reset", () => setTimeout(maj, 0));
+}
+
 // ---------- 9. Duel à deux ----------
 const optionsCat = ["Mode", "Beauté", "Humour", "Sport", "Musique", "Gaming", "Créativité", "Lifestyle"].map((c) => `<option>${c}</option>`).join("");
 const invitesDuo = new Map();
@@ -942,6 +971,7 @@ const invitesDuo = new Map();
     <input name="a" type="file" accept="image/*,video/*" required>
     <button class="bouton large" style="margin-top:10px">Envoyer l'invitation</button>`;
   $("#f-duel").before(zone, f);
+  f.querySelectorAll('input[type="file"]').forEach(ameliorerFichierVS);
 
   f.onsubmit = async (e) => {
     e.preventDefault();
@@ -993,6 +1023,7 @@ async function afficherInvites() {
       <span>${esc(d.titre)} · attend @${esc(d.vers.pseudo)}</span><button type="button" class="bouton contour" data-duo-non="${d.id}">Annuler</button></div>`).join("") + `</div>`;
   }
   box.innerHTML = h;
+  box.querySelectorAll('input[type="file"]').forEach(ameliorerFichierVS);
 }
 
 envelopper("chargerDuels", afficherInvites, "duels");
