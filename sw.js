@@ -1,4 +1,4 @@
-const CACHE = "vs-v28";
+const CACHE = "vs-v29";
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(["./", "./index.html"])));
@@ -35,14 +35,22 @@ self.addEventListener("fetch", (e) => {
 self.addEventListener("push", (e) => {
   let d = {};
   try { d = e.data.json(); } catch (_) { d = { title: "VS", body: e.data ? e.data.text() : "" }; }
-  e.waitUntil(
-    self.registration.showNotification(d.title || "VS", {
+  e.waitUntil((async () => {
+    const ios = /iPhone|iPad|iPod/i.test(self.navigator.userAgent);
+    const ouverts = await clients.matchAll({ type: "window", includeUncontrolled: true });
+    // Si VS est déjà ouvert à l'écran, l'appli prévient elle-même (sauf iPhone et test)
+    if (!ios && !d.force && ouverts.some((c) => c.visibilityState === "visible")) return;
+    await self.registration.showNotification(d.title || "VS", {
       body: d.body || "",
       icon: "icon-192.png",
       badge: "icon-192.png",
+      tag: d.appel ? "appel" : undefined,
+      renotify: !!d.appel,
+      requireInteraction: !!d.appel,
+      vibrate: d.appel ? [300, 150, 300, 150, 300, 150, 300] : [100, 50, 100],
       data: { url: d.url || "./" },
-    })
-  );
+    });
+  })());
 });
 
 self.addEventListener("notificationclick", (e) => {
