@@ -78,26 +78,46 @@ appliquerCouleur(localStorage.getItem("vs_couleur") || "violet");
     #f-chat textarea { margin: 0; resize: none; min-height: 46px; max-height: 130px; flex: 1; border-radius: 22px; line-height: 1.3; }
     #chat-themes { flex: none; padding: 2px 0; }
     #chat-themes .puce { white-space: nowrap; }
-    .bulle[data-th] { position: relative; border-color: transparent !important; }
-    .bulle[data-th]::after { position: absolute; top: -10px; right: -4px; font-size: 0.95rem; }
-    .bulle.th-amour { background: linear-gradient(135deg, #ff5e8a, #b4005a) !important; }
-    .bulle.th-amitie { background: linear-gradient(135deg, #34d399, #0f766e) !important; }
-    .bulle.th-flirt { background: linear-gradient(135deg, #ff7ab8, #ff9a3c) !important; }
-    .bulle.th-fete { background: linear-gradient(135deg, #f59e0b, #ec4899, #8b5cf6) !important; }
-    .bulle.th-calme { background: linear-gradient(135deg, #60a5fa, #1e3a8a) !important; }
-    .bulle.th-feu { background: linear-gradient(135deg, #ff7a18, #c1121f) !important; }
-    .bulle[data-th="amour"]::after { content: "💕"; }
-    .bulle[data-th="amitie"]::after { content: "🤝"; }
-    .bulle[data-th="flirt"]::after { content: "😘"; }
-    .bulle[data-th="fete"]::after { content: "🎉"; }
-    .bulle[data-th="calme"]::after { content: "🌙"; }
-    .bulle[data-th="feu"]::after { content: "🔥"; }
-    #chat[data-th="amour"] { background: radial-gradient(600px 420px at 50% 0, rgba(255, 94, 138, 0.25), transparent 70%), var(--noir); }
-    #chat[data-th="amitie"] { background: radial-gradient(600px 420px at 50% 0, rgba(52, 211, 153, 0.22), transparent 70%), var(--noir); }
-    #chat[data-th="flirt"] { background: radial-gradient(600px 420px at 50% 0, rgba(255, 154, 60, 0.22), transparent 70%), var(--noir); }
-    #chat[data-th="fete"] { background: radial-gradient(600px 420px at 50% 0, rgba(236, 72, 153, 0.22), transparent 70%), var(--noir); }
-    #chat[data-th="calme"] { background: radial-gradient(600px 420px at 50% 0, rgba(96, 165, 250, 0.22), transparent 70%), var(--noir); }
-    #chat[data-th="feu"] { background: radial-gradient(600px 420px at 50% 0, rgba(255, 122, 24, 0.25), transparent 70%), var(--noir); }
+    /* thèmes de discussion : fond, bulles, champ, boutons */
+    #chat[data-th]:not([data-th="aucun"]) { background: linear-gradient(180deg, var(--th-f1), var(--th-f2)); }
+    #chat[data-th]:not([data-th="aucun"])::before { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+      background-image: var(--th-motif); background-size: 140px 140px; opacity: 0.22; }
+    #chat[data-th]:not([data-th="aucun"]) > * { position: relative; z-index: 1; }
+    #chat[data-th]:not([data-th="aucun"]) #fil-chat { background: rgba(0, 0, 0, 0.22); border-color: var(--th-bord); box-shadow: none; }
+    #chat[data-th]:not([data-th="aucun"]) .bulle { background: var(--th-autre); border-color: var(--th-bord); }
+    #chat[data-th]:not([data-th="aucun"]) .bulle.moi { background: linear-gradient(135deg, var(--th-m1), var(--th-m2)); border-color: transparent; }
+    #chat[data-th]:not([data-th="aucun"]) .bulle.appel-manque { border-color: #ff4d5e; }
+    #chat[data-th]:not([data-th="aucun"]) .voc-play { background: linear-gradient(135deg, var(--th-m1), var(--th-m2)); box-shadow: none; }
+    #chat[data-th]:not([data-th="aucun"]) .bulle.moi .voc-play { background: rgba(8, 8, 13, 0.85); }
+    #chat[data-th]:not([data-th="aucun"]) .voc-onde i.lue { background: var(--th-m1); box-shadow: none; }
+    #chat[data-th]:not([data-th="aucun"]) #chat-texte { background: rgba(0, 0, 0, 0.35); border-color: var(--th-bord); }
+    #chat[data-th]:not([data-th="aucun"]) #chat-texte:focus { border-color: var(--th-m1); box-shadow: 0 0 14px var(--th-bord); }
+    #chat[data-th]:not([data-th="aucun"]) .outil-chat { background: rgba(0, 0, 0, 0.3); border-color: var(--th-bord); }
+    #chat[data-th]:not([data-th="aucun"]) #f-chat > .bouton { background: linear-gradient(135deg, var(--th-m1), var(--th-m2)); box-shadow: 0 0 14px var(--th-bord); }
+    #chat[data-th]:not([data-th="aucun"]) .lien { color: var(--th-m1); }
+    .sys-th { align-self: center; font-size: 0.78rem; color: var(--gris); padding: 4px 12px; border-radius: 999px; background: rgba(0, 0, 0, 0.25); }
+    /* appui long : réactions, publication ouverte depuis un message */
+    #fil-chat .bulle { position: relative; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+    .bulle.avec-reac { margin-bottom: 14px; }
+    .reacs { position: absolute; bottom: -13px; right: 10px; z-index: 2; font-size: 0.8rem; padding: 2px 8px; border-radius: 999px;
+      white-space: nowrap; background: var(--noir-2); border: 1px solid var(--contour); }
+    .bulle:not(.moi) .reacs { right: auto; left: 10px; }
+    .bulle small.modif { text-align: right; font-size: 0.65rem; }
+    .reac-barre { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 12px; }
+    .reac-btn { flex: 1; max-width: 52px; aspect-ratio: 1; font-size: 1.6rem; line-height: 1; padding: 0; cursor: pointer; border-radius: 50%;
+      background: var(--noir); border: 1px solid var(--contour); }
+    .reac-btn.actif { border-color: var(--neon); box-shadow: var(--lueur); }
+    .bulle[data-vs-reel] { cursor: pointer; }
+    .bulle[data-vs-reel]::after { content: "▶"; position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%);
+      font-size: 2.2rem; color: #fff; text-shadow: 0 0 10px #000; pointer-events: none; }
+    .bulle[data-vs-duel] { cursor: pointer; }
+    #commentaires { z-index: 60; }
+    #pub { position: fixed; inset: 0; z-index: 58; background: var(--noir); overflow-y: auto; }
+    #pub .reel { height: 100%; margin: 0; border: none; border-radius: 0; box-shadow: none; }
+    #pub .reel video { width: 100%; height: 100%; max-height: none; aspect-ratio: auto; object-fit: cover; }
+    #pub .reel-info { padding: 40px 80px 28px 16px; }
+    #pub-fermer { position: fixed; z-index: 62; top: calc(14px + env(safe-area-inset-top, 0px)); left: 14px; }
+    .pub-duel { padding: calc(72px + env(safe-area-inset-top, 0px)) 14px 30px; max-width: 640px; margin: 0 auto; }
     .bulle.appel-manque { border-color: #ff4d5e; color: #ff8a94; }
 
     /* bouton enregistrer sur les éclairs */
@@ -152,25 +172,36 @@ const themeChat = () => (dest ? localStorage.getItem("vs_chat_th_" + dest.id) ||
     '<button type="button" class="outil-chat" id="chat-menu" aria-label="Options de la discussion"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>');
 })();
 
-function majThemesChat() {
-  const th = themeChat();
-  document.querySelectorAll("[data-chat-th]").forEach((b) => b.classList.toggle("actif", b.dataset.chatTh === th));
-  $("#chat").dataset.th = th;
+const THEME_DEF = {
+  amour: { fond: ["#3d0b24", "#10040b"], moi: ["#ff5e8a", "#b4005a"], autre: "#2b1020", bord: "rgba(255, 94, 138, 0.5)", emojis: ["💕", "💗", "🌹", "💖"] },
+  amitie: { fond: ["#08392f", "#04120e"], moi: ["#34d399", "#0f766e"], autre: "#0d2b25", bord: "rgba(52, 211, 153, 0.5)", emojis: ["🤝", "😄", "🌿", "✨"] },
+  flirt: { fond: ["#521a33", "#1c0a0a"], moi: ["#ff7ab8", "#ff9a3c"], autre: "#351522", bord: "rgba(255, 154, 60, 0.5)", emojis: ["😘", "😏", "💋", "💘"] },
+  fete: { fond: ["#3d1356", "#0d0f33"], moi: ["#ec4899", "#8b5cf6"], autre: "#26143d", bord: "rgba(236, 72, 153, 0.5)", emojis: ["🎉", "🎈", "✨", "🥳"] },
+  calme: { fond: ["#0d2147", "#050a18"], moi: ["#60a5fa", "#1e3a8a"], autre: "#0f1b35", bord: "rgba(96, 165, 250, 0.5)", emojis: ["🌙", "⭐", "☁️", "✨"] },
+  feu: { fond: ["#4d1305", "#150503"], moi: ["#ff7a18", "#c1121f"], autre: "#301008", bord: "rgba(255, 122, 24, 0.5)", emojis: ["🔥", "⚡", "💥", "🌋"] },
+};
+let themeVu = null, dernierChoix = 0;
+
+function motifEmojis(liste) {
+  const pos = [[10, 38], [76, 26], [38, 84], [100, 98], [112, 58], [8, 124]];
+  const t = pos.map((p, k) => `<text x='${p[0]}' y='${p[1]}' font-size='${22 + (k % 3) * 4}'>${liste[k % liste.length]}</text>`).join("");
+  return 'url("data:image/svg+xml,' + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'>${t}</svg>`) + '")';
 }
-document.addEventListener("click", (e) => {
-  if (e.target.closest("#chat-menu") && dest) {
-    const th = themeChat();
-    $("#menu-actions").innerHTML = '<p class="secondaire">Thème de la discussion</p>'
-      + THEMES_CHAT.map(([k, n]) => `<button type="button" class="bouton ${k === th ? "" : "contour"} large" data-chat-th="${k}">${n}</button>`).join("");
-    $("#menu").hidden = false;
-    return;
-  }
-  const b = e.target.closest("[data-chat-th]");
-  if (!b || !dest) return;
-  localStorage.setItem("vs_chat_th_" + dest.id, b.dataset.chatTh);
-  majThemesChat();
-  $("#menu").hidden = true;
-});
+
+function appliquerThemeChat(th) {
+  const c = $("#chat"), d = THEME_DEF[th];
+  const noms = ["--th-f1", "--th-f2", "--th-m1", "--th-m2", "--th-autre", "--th-bord", "--th-motif"];
+  c.dataset.th = d ? th : "aucun";
+  if (!d) { noms.forEach((n) => c.style.removeProperty(n)); return; }
+  c.style.setProperty("--th-f1", d.fond[0]);
+  c.style.setProperty("--th-f2", d.fond[1]);
+  c.style.setProperty("--th-m1", d.moi[0]);
+  c.style.setProperty("--th-m2", d.moi[1]);
+  c.style.setProperty("--th-autre", d.autre);
+  c.style.setProperty("--th-bord", d.bord);
+  c.style.setProperty("--th-motif", motifEmojis(d.emojis));
+}
+function majThemesChat() { appliquerThemeChat(themeChat()); }
 
 {
   const ancienOuvrir = window.ouvrirChat;
@@ -187,8 +218,7 @@ $("#f-chat").onsubmit = async (e) => {
   const ta = $("#chat-texte");
   const t = ta.value.trim();
   if (!t || !dest) return;
-  const th = themeChat();
-  const { error } = await db.rpc("envoyer_message", { p_dest: dest.id, p_texte: (th !== "aucun" ? "[[th:" + th + "]]" : "") + t });
+  const { error } = await db.rpc("envoyer_message", { p_dest: dest.id, p_texte: t });
   if (error) return msg(error.message);
   ta.value = "";
   ta.style.height = "auto";
@@ -196,23 +226,84 @@ $("#f-chat").onsubmit = async (e) => {
   rafraichirChat();
 };
 
+const msgsChat = new Map();
+let reacsChat = new Map();
+
+function marquerBulle(h, m, modifie) {
+  const reacs = reacsChat.get(String(m.id)) || [];
+  let extra = "";
+  if (modifie) extra += '<small class="modif">modifié</small>';
+  if (reacs.length) {
+    const uniques = [...new Set(reacs.map((x) => x.emoji))];
+    extra += `<span class="reacs">${uniques.map(esc).join("")}${reacs.length > 1 ? " " + reacs.length : ""}</span>`;
+  }
+  h = h.replace(/<\/div>\s*$/, extra + "</div>");
+  return h.replace('<div class="bulle ', `<div data-mid="${esc(m.id)}" class="bulle ${reacs.length ? "avec-reac " : ""}`);
+}
+
 {
   const ancienBulle = window.bulle;
   window.bulle = function (m) {
-    let c = m.contenu || "", th = "";
-    const mt = /^\[\[th:(\w+)\]\]\s?([\s\S]*)$/.exec(c);
-    if (mt) { th = mt[1]; c = mt[2]; }
+    let c = m.contenu || "";
+    const mth = /^\[\[theme:(\w+)\]\]/.exec(c);
+    if (mth) {
+      themeVu = mth[1];
+      const nom = (THEMES_CHAT.find((x) => x[0] === mth[1]) || [0, mth[1]])[1];
+      const qui = m.sender_id === moi.id ? "Tu as changé le thème" : (dest ? "@" + dest.pseudo : "Ton ami") + " a changé le thème";
+      return `<div class="sys-th">🎨 ${esc(qui)} : ${esc(nom)}</div>`;
+    }
+    c = c.replace(/^\[\[th:\w+\]\]\s?/, "");
+    let modifie = false;
+    if (c.endsWith("\u200b")) { modifie = true; c = c.slice(0, -1); }
     const moiMsg = m.sender_id === moi.id ? "moi" : "";
     const ma = /^\[\[appel:manque\|(audio|video)\]\]$/.exec(c);
     if (ma) {
       const v = ma[1] === "video" ? "vidéo" : "audio";
-      return `<div class="bulle appel-manque ${moiMsg}">📞 ${moiMsg ? "Appel " + v + " sans réponse" : "Appel " + v + " manqué"}</div>`;
+      return marquerBulle(`<div class="bulle appel-manque ${moiMsg}">📞 ${moiMsg ? "Appel " + v + " sans réponse" : "Appel " + v + " manqué"}</div>`, m, false);
     }
     const mi = /^\[\[invite:([^\]]+)\]\]\s*([\s\S]*)$/.exec(c);
-    if (mi) return `<div class="bulle ${moiMsg}" data-voir-invites="1"><strong>🤝 Duel à deux</strong><br>${esc(mi[2])}<small>Touche pour répondre</small></div>`;
-    let h = ancienBulle({ ...m, contenu: c });
-    if (th) h = h.replace('<div class="bulle ', `<div data-th="${esc(th)}" class="bulle th-${esc(th)} `);
-    return h;
+    if (mi) return marquerBulle(`<div class="bulle ${moiMsg}" data-voir-invites="1"><strong>🤝 Duel à deux</strong><br>${esc(mi[2])}<small>Touche pour répondre</small></div>`, m, false);
+    const md = /^\[\[duel:([^\]]+)\]\]\s*([\s\S]*)$/.exec(c);
+    if (md) return marquerBulle(`<div class="bulle ${moiMsg}" data-vs-duel="${esc(md[1])}"><strong>⚔️ Duel VS</strong><br>${esc(md[2])}<small>Touche pour voir et voter</small></div>`, m, false);
+    if (m.reel_id && m.reels) {
+      return marquerBulle(`<div class="bulle ${moiMsg}" data-vs-reel="${esc(m.reel_id)}"><video src="${esc(m.reels.video_url)}#t=0.001" muted playsinline preload="metadata" style="pointer-events:none"></video><small>${esc(m.reels.legende)}</small><small>Touche pour ouvrir la publication</small></div>`, m, false);
+    }
+    return marquerBulle(ancienBulle({ ...m, contenu: c }), m, modifie);
+  };
+
+  // Nouvelle version de l'actualisation de la discussion (messages + réactions + modifications)
+  window.rafraichirChat = async function () {
+    if (!dest) return;
+    const pour = dest.id;
+    const { data } = await db.from("messages").select("id,sender_id,contenu,created_at,reel_id,reels(video_url,legende),story_id,stories(media_url,type)")
+      .or(`and(sender_id.eq.${moi.id},receiver_id.eq.${pour}),and(sender_id.eq.${pour},receiver_id.eq.${moi.id})`)
+      .order("created_at", { ascending: true }).limit(100);
+    const liste = data || [];
+    const rmap = new Map();
+    if (liste.length) {
+      const r = await db.from("message_reactions").select("message_id,user_id,emoji").in("message_id", liste.map((x) => x.id));
+      (r.data || []).forEach((x) => {
+        const k = String(x.message_id);
+        if (!rmap.has(k)) rmap.set(k, []);
+        rmap.get(k).push(x);
+      });
+    }
+    if (!dest || dest.id !== pour) return;
+    const cle = liste.map((x) => x.id + "|" + x.contenu + "|" + (rmap.get(String(x.id)) || []).map((y) => y.user_id + y.emoji).join(",")).join("\n");
+    const box = $("#fil-chat");
+    if (cle === cleChat && box.innerHTML) return;
+    cleChat = cle;
+    msgsChat.clear();
+    liste.forEach((x) => msgsChat.set(String(x.id), x));
+    reacsChat = rmap;
+    themeVu = null;
+    const bas = box.scrollTop + box.clientHeight >= box.scrollHeight - 40;
+    box.innerHTML = liste.map((x) => window.bulle(x)).join("") || `<p class="secondaire">Dis bonjour à @${esc(dest.pseudo)} !</p>`;
+    if (bas) box.scrollTop = box.scrollHeight;
+    if (themeVu !== null && themeVu !== themeChat() && Date.now() - dernierChoix > 8000) {
+      localStorage.setItem("vs_chat_th_" + pour, themeVu);
+      majThemesChat();
+    }
   };
 }
 
@@ -221,6 +312,7 @@ function apercuMsg(contenu) {
   if (t.startsWith("[[img:")) return "📷 Photo";
   if (t.startsWith("[[voc:")) return "🎤 Message vocal";
   if (t.startsWith("[[appel:")) return "📞 Appel manqué";
+  if (t.startsWith("[[theme:")) return "🎨 Thème changé";
   const i = /^\[\[invite:[^\]]+\]\]\s*([\s\S]*)$/.exec(t);
   if (i) return "🤝 Duel à deux : " + i[1];
   const d = /^\[\[duel:[^\]]+\]\]\s*([\s\S]*)$/.exec(t);
@@ -229,6 +321,375 @@ function apercuMsg(contenu) {
 }
 
 document.addEventListener("click", (e) => { if (e.target.closest("[data-voir-invites]")) aller("duels"); });
+
+// ---------- 3b. Menu ⋮ de la discussion + archivées / bloquées ----------
+const prefsConv = new Map();
+let bloquesIds = new Set(), derniersMsg = new Map(), pseudosMuets = new Set();
+const POINTS_SVG = '<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>';
+
+(() => {
+  const st = document.createElement("style");
+  st.textContent = "#conv-menu svg { fill: var(--blanc); stroke: none; } .ic-muet { opacity: 0.8; }";
+  document.head.appendChild(st);
+  const tete = document.querySelector(".conv-tete");
+  if (!tete) return;
+  const g = document.createElement("div");
+  g.style.cssText = "display:flex;gap:8px";
+  g.appendChild($("#conv-loupe"));
+  g.insertAdjacentHTML("beforeend", `<button type="button" class="outil-chat" id="conv-menu" aria-label="Menu des discussions">${POINTS_SVG}</button>`);
+  tete.appendChild(g);
+})();
+
+async function chargerPrefs() {
+  if (!moi) return;
+  const [p, b] = await Promise.all([
+    db.from("conv_prefs").select("other_id,muet,archive_at").eq("user_id", moi.id),
+    db.from("blocked_users").select("blocked_id").eq("user_id", moi.id),
+  ]);
+  prefsConv.clear();
+  (p.data || []).forEach((x) => prefsConv.set(x.other_id, { muet: !!x.muet, archive_at: x.archive_at }));
+  bloquesIds = new Set((b.data || []).map((x) => x.blocked_id));
+  const ids = [...prefsConv].filter(([, v]) => v.muet).map(([k]) => k);
+  pseudosMuets = new Set();
+  if (ids.length) {
+    const { data } = await db.from("profiles").select("pseudo").in("id", ids);
+    pseudosMuets = new Set((data || []).map((x) => x.pseudo));
+  }
+}
+
+function estArchive(id) {
+  const p = prefsConv.get(id);
+  if (!p || !p.archive_at) return false;
+  const dernier = derniersMsg.get(id);
+  return !dernier || new Date(dernier) <= new Date(p.archive_at);
+}
+
+async function majPref(id, champs) {
+  const cur = prefsConv.get(id) || { muet: false, archive_at: null };
+  const nouv = { ...cur, ...champs };
+  const { error } = await db.from("conv_prefs").upsert(
+    { user_id: moi.id, other_id: id, muet: nouv.muet, archive_at: nouv.archive_at },
+    { onConflict: "user_id,other_id" });
+  if (error) { msg("Exécute d'abord conv-prefs.sql dans Supabase."); return false; }
+  await chargerPrefs();
+  return true;
+}
+
+async function dernierMsgAvec(id) {
+  const { data } = await db.from("messages").select("created_at")
+    .or(`and(sender_id.eq.${moi.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${moi.id})`)
+    .order("created_at", { ascending: false }).limit(1);
+  return data && data[0] ? data[0].created_at : new Date().toISOString();
+}
+
+const btnMenu = (act, texte, extra = "") => `<button type="button" class="bouton contour large" data-vs-act="${act}" ${extra}>${texte}</button>`;
+
+function ouvrirMenuChat() {
+  const p = prefsConv.get(dest.id) || {};
+  $("#menu-actions").innerHTML =
+    btnMenu("themes", "🎨 Thème de la discussion")
+    + btnMenu("sourdine", p.muet ? "🔔 Réactiver les notifications" : "🔕 Mettre cette discussion en sourdine")
+    + btnMenu("archiver", estArchive(dest.id) ? "📦 Désarchiver la discussion" : "📦 Archiver la discussion")
+    + btnMenu("bloquer", "🚫 Bloquer @" + esc(dest.pseudo));
+  $("#menu").hidden = false;
+}
+
+function ouvrirMenuConv() {
+  const na = [...prefsConv].filter(([id]) => estArchive(id)).length;
+  $("#menu-actions").innerHTML =
+    btnMenu("voir-archives", "📦 Discussions archivées (" + na + ")")
+    + btnMenu("voir-bloques", "🚫 Personnes bloquées (" + bloquesIds.size + ")");
+  $("#menu").hidden = false;
+}
+
+function listeThemes() {
+  const th = themeChat();
+  $("#menu-actions").innerHTML = '<p class="secondaire">Choisis un thème : il change tout pour vous deux.</p>'
+    + THEMES_CHAT.map(([k, n]) => `<button type="button" class="bouton ${k === th ? "" : "contour"} large" data-chat-th="${k}">${n}</button>`).join("");
+}
+
+async function choisirTheme(k) {
+  if (!dest) return;
+  const pour = dest.id;
+  localStorage.setItem("vs_chat_th_" + pour, k);
+  dernierChoix = Date.now();
+  majThemesChat();
+  $("#menu").hidden = true;
+  const { error } = await db.rpc("envoyer_message", { p_dest: pour, p_texte: "[[theme:" + k + "]]" });
+  if (error) return msg(error.message);
+  if (dest && dest.id === pour) { cleChat = ""; rafraichirChat(); }
+}
+
+async function afficherArchives() {
+  await chargerPrefs();
+  const ids = [...prefsConv].filter(([id]) => estArchive(id)).map(([id]) => id);
+  let lignes = '<p class="secondaire">Aucune discussion archivée.</p>';
+  if (ids.length) {
+    const { data } = await db.from("profiles").select("id,pseudo").in("id", ids);
+    lignes = (data || []).map((p) => `<div class="ligne"><span data-vs-act="ouvrir" data-id="${p.id}" data-pseudo="${esc(p.pseudo)}" style="cursor:pointer">@${esc(p.pseudo)}</span>
+      <button type="button" class="bouton contour" data-vs-act="desarchiver" data-id="${p.id}">Désarchiver</button></div>`).join("");
+  }
+  $("#menu-actions").innerHTML = '<button type="button" class="lien" data-vs-act="menu-conv">← Retour</button><p class="secondaire">Discussions archivées</p>' + lignes;
+}
+
+async function afficherBloques() {
+  const { data } = await db.from("blocked_users").select("blocked_id,profiles!blocked_users_blocked_id_fkey(pseudo)").eq("user_id", moi.id);
+  const lignes = data && data.length
+    ? data.map((x) => `<div class="ligne"><span>@${esc(x.profiles.pseudo)}</span>
+      <button type="button" class="bouton contour" data-vs-act="debloquer" data-id="${x.blocked_id}">Débloquer</button></div>`).join("")
+    : '<p class="secondaire">Aucune personne bloquée.</p>';
+  $("#menu-actions").innerHTML = '<button type="button" class="lien" data-vs-act="menu-conv">← Retour</button><p class="secondaire">Personnes bloquées</p>' + lignes;
+}
+
+document.addEventListener("click", async (e) => {
+  if (e.target.closest("#chat-menu") && dest) return ouvrirMenuChat();
+  if (e.target.closest("#conv-menu")) return ouvrirMenuConv();
+  const t = e.target.closest("[data-chat-th]");
+  if (t) return choisirTheme(t.dataset.chatTh);
+  const a = e.target.closest("[data-vs-act]");
+  if (!a) return;
+  const k = a.dataset.vsAct, id = a.dataset.id;
+  if (k === "themes") return listeThemes();
+  if (k === "menu-conv") return ouvrirMenuConv();
+  if (k === "voir-archives") return afficherArchives();
+  if (k === "voir-bloques") return afficherBloques();
+  if (k === "ouvrir") { $("#menu").hidden = true; return ouvrirChat(id, a.dataset.pseudo); }
+  if (k === "sourdine" && dest) {
+    const muet = !(prefsConv.get(dest.id) || {}).muet;
+    if (await majPref(dest.id, { muet })) msg(muet ? "Discussion en sourdine" : "Notifications réactivées");
+    $("#menu").hidden = true;
+    return;
+  }
+  if (k === "archiver" && dest) {
+    const deja = estArchive(dest.id);
+    const quand = deja ? null : await dernierMsgAvec(dest.id);
+    if (await majPref(dest.id, { archive_at: quand })) {
+      msg(deja ? "Discussion désarchivée" : "Discussion archivée");
+      $("#menu").hidden = true;
+      if (!deja) chargerMessages();
+    }
+    return;
+  }
+  if (k === "desarchiver") {
+    if (await majPref(id, { archive_at: null })) { afficherArchives(); chargerMessages(); }
+    return;
+  }
+  if (k === "bloquer" && dest) {
+    if (!confirm("Bloquer @" + dest.pseudo + " ? Tu ne verras plus ses contenus et il ne pourra plus t'écrire.")) return;
+    const { error } = await db.from("blocked_users").insert({ user_id: moi.id, blocked_id: dest.id });
+    if (error) return msg(error.message);
+    $("#menu").hidden = true;
+    msg("@" + dest.pseudo + " est bloqué.");
+    await chargerPrefs();
+    chargerMessages();
+    return;
+  }
+  if (k === "debloquer") {
+    const { error } = await db.from("blocked_users").delete().eq("user_id", moi.id).eq("blocked_id", id);
+    if (error) return msg(error.message);
+    await chargerPrefs();
+    afficherBloques();
+    chargerMessages();
+  }
+});
+
+// Liste des discussions : cache archivées et bloquées, marque les sourdines
+envelopper("chargerMessages", async () => {
+  await chargerPrefs();
+  const { data } = await db.from("messages").select("sender_id,receiver_id,created_at").order("created_at", { ascending: false }).limit(200);
+  derniersMsg = new Map();
+  (data || []).forEach((m) => {
+    const o = m.sender_id === moi.id ? m.receiver_id : m.sender_id;
+    if (!derniersMsg.has(o)) derniersMsg.set(o, m.created_at);
+  });
+  let reste = 0;
+  document.querySelectorAll("#liste-conv .conv[data-id]").forEach((el) => {
+    const id = el.dataset.id;
+    if (bloquesIds.has(id) || estArchive(id)) { el.remove(); return; }
+    reste++;
+    const p = prefsConv.get(id), nom = el.querySelector(".nom");
+    if (p && p.muet && nom && !el.querySelector(".ic-muet")) nom.insertAdjacentHTML("beforeend", ' <small class="ic-muet">🔕</small>');
+  });
+  if (!reste) $("#liste-conv").innerHTML = '<p class="secondaire">Aucune discussion. Cherche un pseudo avec la loupe, ou ouvre ⋮ pour voir les archivées.</p>';
+}, "messages");
+
+// Sourdine : pas de son ni de message à l'écran pour une discussion en sourdine
+{
+  const ancienAlerter = window.alerter;
+  window.alerter = function (texte) {
+    const m = /^Nouveau message de @(\S+)$/.exec(texte || "");
+    if (m && pseudosMuets.has(m[1])) {
+      majBadges();
+      if (pageActuelle === "messages" && !dest) chargerMessages();
+      return;
+    }
+    return ancienAlerter(texte);
+  };
+}
+
+// ---------- 3c. Appui long sur un message + ouvrir la publication / le duel partagé ----------
+const EMOJIS_REAC = ["❤️", "😂", "😮", "😢", "😡", "👍"];
+let ignorerClicJusque = 0;
+const texteMsg = (m) => String(m.contenu || "").replace(/\u200b$/, "");
+const estTexteSimple = (m) => !m.story_id && !m.reel_id && !/^\[\[/.test(m.contenu || "");
+
+function ouvrirMenuMsg(mid) {
+  const m = msgsChat.get(String(mid));
+  if (!m) return;
+  const mien = m.sender_id === moi.id;
+  const mienne = (reacsChat.get(String(mid)) || []).find((x) => x.user_id === moi.id);
+  const btn = (k, t) => `<button type="button" class="bouton contour large" data-vs-msg="${k}" data-mid="${esc(mid)}">${t}</button>`;
+  let h = '<div class="reac-barre">' + EMOJIS_REAC.map((e) =>
+    `<button type="button" class="reac-btn ${mienne && mienne.emoji === e ? "actif" : ""}" data-vs-msg="react" data-mid="${esc(mid)}" data-emoji="${e}">${e}</button>`).join("") + "</div>";
+  if (estTexteSimple(m)) h += btn("copy", "📋 Copier");
+  if (mien && estTexteSimple(m)) h += btn("edit", "✏️ Modifier");
+  if (mien) h += btn("del", "🗑️ Supprimer");
+  $("#menu-actions").innerHTML = h;
+  $("#menu").hidden = false;
+}
+
+(() => {
+  const fil = $("#fil-chat");
+  let t = null, dep = null;
+  const stop = () => { clearTimeout(t); t = null; };
+  fil.addEventListener("pointerdown", (e) => {
+    const b = e.target.closest(".bulle[data-mid]");
+    if (!b || e.target.closest("audio, video[controls]")) return;
+    dep = { x: e.clientX, y: e.clientY };
+    stop();
+    t = setTimeout(() => {
+      t = null;
+      ignorerClicJusque = Date.now() + 700;
+      if (navigator.vibrate) navigator.vibrate(25);
+      ouvrirMenuMsg(b.dataset.mid);
+    }, 450);
+  });
+  fil.addEventListener("pointermove", (e) => { if (t && dep && Math.hypot(e.clientX - dep.x, e.clientY - dep.y) > 10) stop(); });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((n) => fil.addEventListener(n, stop));
+  fil.addEventListener("contextmenu", (e) => e.preventDefault());
+  fil.addEventListener("click", (e) => {
+    if (Date.now() < ignorerClicJusque) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
+})();
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-vs-msg]");
+  if (!b) return;
+  const m = msgsChat.get(String(b.dataset.mid));
+  if (!m) return;
+  const k = b.dataset.vsMsg;
+  $("#menu").hidden = true;
+  const rafraichir = () => { cleChat = ""; rafraichirChat(); };
+  if (k === "react") {
+    const mienne = (reacsChat.get(String(m.id)) || []).find((x) => x.user_id === moi.id);
+    const emoji = b.dataset.emoji;
+    const { error } = mienne && mienne.emoji === emoji
+      ? await db.from("message_reactions").delete().eq("message_id", m.id).eq("user_id", moi.id)
+      : await db.from("message_reactions").upsert({ message_id: m.id, user_id: moi.id, emoji }, { onConflict: "message_id,user_id" });
+    if (error) return msg("Exécute d'abord vs-messages.sql dans Supabase.");
+    return rafraichir();
+  }
+  if (k === "copy") {
+    try { await navigator.clipboard.writeText(texteMsg(m)); msg("Message copié"); } catch (err) { msg("Impossible de copier."); }
+    return;
+  }
+  if (k === "edit") {
+    const t = prompt("Modifier le message", texteMsg(m));
+    if (t === null) return;
+    const n = t.trim().slice(0, 900);
+    if (!n || n === texteMsg(m)) return;
+    const { error } = await db.rpc("modifier_message", { p_id: String(m.id), p_texte: n + "\u200b" });
+    if (error) return msg("Impossible de modifier : exécute vs-messages.sql dans Supabase.");
+    return rafraichir();
+  }
+  if (k === "del") {
+    if (!confirm("Supprimer ce message pour tout le monde ?")) return;
+    const { error } = await db.rpc("supprimer_message", { p_id: String(m.id) });
+    if (error) return msg("Impossible de supprimer : exécute vs-messages.sql dans Supabase.");
+    msg("Message supprimé");
+    rafraichir();
+  }
+});
+
+// Publication / duel ouverts directement depuis un message partagé
+document.body.insertAdjacentHTML("beforeend", '<div id="pub" hidden></div>');
+
+function fermerPub() {
+  const box = $("#pub");
+  const v = box.querySelector("video");
+  if (v) v.pause();
+  box.hidden = true;
+  box.innerHTML = "";
+}
+
+const ICONE_COMM = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+
+async function ouvrirPublication(id) {
+  const { data: r, error } = await db.from("reels")
+    .select("id,user_id,video_url,legende,profiles!reels_user_id_fkey(pseudo),reel_likes(user_id),reel_comments(count)").eq("id", id).maybeSingle();
+  if (error || !r) return msg("Cette publication n'existe plus.");
+  let suit = false;
+  if (r.user_id !== moi.id) {
+    const f = await db.from("follows").select("followed_id").eq("follower_id", moi.id).eq("followed_id", r.user_id).maybeSingle();
+    suit = !!f.data;
+  }
+  const sv = await db.from("reel_prefs").select("reel_id").eq("user_id", moi.id).eq("reel_id", r.id).eq("kind", "saved").maybeSingle();
+  const sauve = !!sv.data, aime = r.reel_likes.some((l) => l.user_id === moi.id);
+  const ps = esc(r.profiles.pseudo);
+  $("#pub").innerHTML = `<button type="button" class="cam-rond" id="pub-fermer" aria-label="Fermer">✕</button>
+    <article class="reel">
+      <video src="${esc(r.video_url)}" loop muted playsinline autoplay></video>
+      <button class="points3" data-type="reel" data-id="${r.id}" data-user="${r.user_id}" data-pseudo="${ps}" data-url="${esc(r.video_url)}" data-legende="${esc(r.legende)}">${ICONE3}</button>
+      <div class="reel-actions">
+        <button class="coeur ${aime ? "actif" : ""}" data-id="${r.id}" data-aime="${aime}"><span>♥</span><small>${r.reel_likes.length}</small></button>
+        <button class="comm" data-id="${r.id}"><span>${ICONE_COMM}</span><small>${r.reel_comments[0]?.count ?? 0}</small></button>
+        <button class="partage" data-id="${r.id}" data-user="${r.user_id}" data-pseudo="${ps}" data-url="${esc(r.video_url)}"><span>${AVION}</span><small>Envoyer</small></button>
+        <button class="sauve ${sauve ? "actif" : ""}" data-id="${r.id}" data-sauve="${sauve}"><span>${ICONE_SAUVER}</span><small>${sauve ? "Gardé" : "Sauver"}</small></button>
+      </div>
+      <div class="reel-info"><strong class="lien-profil" data-profil="${r.user_id}">@${ps}</strong><p>${esc(r.legende)}</p>
+      ${r.user_id === moi.id ? "" : boutonSuivre(r.user_id, suit)}</div></article>`;
+  $("#pub").hidden = false;
+  const v = $("#pub video");
+  if (v) v.play().catch(() => {});
+}
+
+async function ouvrirDuelPub(id) {
+  const { data, error } = await db.rpc("duels_liste");
+  const d = (data || []).find((x) => String(x.id) === String(id));
+  if (error || !d) return msg("Ce duel n'existe plus.");
+  const a = Number(d.votes_a), b = Number(d.votes_b), t = a + b, pa = t ? Math.round((a * 100) / t) : 50;
+  const fini = new Date(d.fin) < new Date();
+  const fin = new Date(d.fin).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+  let bas;
+  if (fini) bas = `<p><strong>${a === b ? "Égalité" : "Gagnant : " + (a > b ? "A" : "B")}</strong></p>`;
+  else if (d.mon_vote) bas = `<p class="secondaire">Tu as voté ${esc(String(d.mon_vote).toUpperCase())}</p>`;
+  else bas = `<div class="deux"><button class="bouton large" data-pub-vote="a" data-pub-id="${esc(d.id)}">Voter A</button>
+    <button class="bouton contour large" data-pub-vote="b" data-pub-id="${esc(d.id)}">Voter B</button></div>`;
+  $("#pub").innerHTML = `<button type="button" class="cam-rond" id="pub-fermer" aria-label="Fermer">✕</button>
+    <div class="pub-duel"><article class="carte duel"><strong style="display:block">${esc(d.titre)}</strong>
+    <p class="secondaire">${esc(d.categorie)}, par @${esc(d.pseudo)} — ${fini ? "terminé" : "fin le " + fin}</p>
+    <div class="duel-ligne" style="margin-top:12px">${media(d.type, d.image_a, "A")}<div class="vs">VS</div>${media(d.type, d.image_b, "B")}</div>
+    <div class="barre"><i style="width:${pa}%"></i></div>
+    <p class="secondaire">A ${pa} % · B ${100 - pa} % · ${t} vote${t > 1 ? "s" : ""}</p>${bas}</article></div>`;
+  $("#pub").hidden = false;
+}
+
+document.addEventListener("click", async (e) => {
+  if (e.target.closest("#pub-fermer")) return fermerPub();
+  if (e.target.closest("#pub [data-profil]")) fermerPub();
+  const r = e.target.closest("[data-vs-reel]");
+  if (r) return ouvrirPublication(r.dataset.vsReel);
+  const d = e.target.closest("[data-vs-duel]");
+  if (d) return ouvrirDuelPub(d.dataset.vsDuel);
+  const v = e.target.closest("[data-pub-vote]");
+  if (v) {
+    const id = v.dataset.pubId;
+    const { error } = await db.rpc("voter", { p_duel: String(id), p_choix: v.dataset.pubVote });
+    if (error) msg(error.message);
+    else { msg("Vote enregistré !"); majProfil(); }
+    ouvrirDuelPub(id);
+  }
+});
 
 // ---------- 4. Profils : « en retour » à la place des éclairs ----------
 let profilVuId = null;
@@ -644,6 +1105,7 @@ function majCartesExtras() {
   window.demarrer = async function (user) {
     await ancienDemarrer(user);
     demarrerPresence();
+    chargerPrefs();
     activerPush(true);
   };
 }
